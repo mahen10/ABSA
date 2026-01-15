@@ -8,6 +8,10 @@ import seaborn as sns
 import nltk
 import importlib.util
 
+try:
+    nltk.data.find("tokenizers/punkt")
+except LookupError:
+    nltk.download("punkt")
 
 # ===============================
 # SAFE NLTK DOWNLOAD
@@ -233,6 +237,7 @@ elif menu == "Analisis & Hasil":
         fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
         st.pyplot(fig)
+
 
 
 

@@ -1,26 +1,26 @@
 # ============================
 # FILE: 3_post_absa_preprocessing.py
 # Deskripsi:
-# Pisahkan Tokenisasi, Stopword Removal, dan Stemming
-# ke kolom sendiri (POST-ABSA)
+# Preprocessing Tahap 2 (PASCA-ABSA)
+# - Tokenisasi
+# - Stopword Removal
+# - Stemming
+# Output:
+# - processed_opinion (siap TF-IDF)
 # ============================
 
 import pandas as pd
+import os
 import re
 import nltk
-import os
-
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
 
-
 # ============================
-# NLTK RESOURCE CHECK (AMAN CLOUD)
+# NLTK RESOURCE CHECK (AMAN)
 # ============================
 def ensure_nltk_resources():
     resources = [
-        ("tokenizers/punkt", "punkt"),
         ("corpora/stopwords", "stopwords"),
     ]
 
@@ -32,77 +32,72 @@ def ensure_nltk_resources():
 
 
 # ============================
-# PREPROCESSING FUNCTION (TIDAK DIUBAH)
+# GLOBAL OBJECT
 # ============================
-def preprocess_steps(text, stop_words, stemmer):
-    # Bersihkan spasi berlebih
-    text = re.sub(r'\s+', ' ', text.strip())
+STOPWORDS = set(stopwords.words("english"))
+STEMMER = PorterStemmer()
 
-    # Tokenisasi
-    tokens = word_tokenize(text.lower())
 
-    # Stopword Removal
+# ============================
+# TEXT PREPROCESS FUNCTION
+# ============================
+def preprocess_text(text: str):
+    if not isinstance(text, str):
+        return "", "", ""
+
+    # Normalize whitespace
+    text = re.sub(r"\s+", " ", text.strip().lower())
+
+    # Tokenization (regex-safe)
+    tokens = re.findall(r"\b\w+\b", text)
+
+    # Stopword removal
     tokens_no_stop = [
         t for t in tokens
-        if t.lower() not in stop_words
+        if t not in STOPWORDS and len(t) > 2
     ]
 
     # Stemming
-    stemmed = [
-        stemmer.stem(t)
-        for t in tokens_no_stop
-    ]
+    stemmed = [STEMMER.stem(t) for t in tokens_no_stop]
 
-    return tokens, tokens_no_stop, stemmed
+    return (
+        " ".join(tokens),
+        " ".join(tokens_no_stop),
+        " ".join(stemmed)
+    )
 
 
 # ============================
-# MAIN PIPELINE
+# PIPELINE ENTRY POINT
 # ============================
-def run_post_absa_preprocessing():
+def run(input_path: str, output_path: str):
+    """
+    Dipanggil dari app.py
+    """
     ensure_nltk_resources()
 
-    INPUT_PATH = os.path.join("output", "absa_output.xlsx")
-    OUTPUT_PATH = os.path.join("output", "absa_processed.xlsx")
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Input tidak ditemukan: {input_path}")
 
-    if not os.path.exists(INPUT_PATH):
-        raise FileNotFoundError(
-            f"File tidak ditemukan: {INPUT_PATH}"
-        )
+    df = pd.read_excel(input_path)
 
-    # Load data hasil ABSA
-    df = pd.read_excel(INPUT_PATH, engine="openpyxl")
+    if "opinion_context" not in df.columns:
+        raise ValueError("Kolom 'opinion_context' tidak ditemukan")
 
-    # Stopwords & stemmer
-    stop_words = set(stopwords.words("english"))
-    stemmer = PorterStemmer()
+    tokens, no_stop, stem = [], [], []
 
-    # Terapkan preprocessing
-    df[["token", "no_stopword", "stem"]] = df["opinion_context"].apply(
-        lambda x: pd.Series(
-            preprocess_steps(str(x), stop_words, stemmer)
-        )
-    )
+    for text in df["opinion_context"]:
+        t, ns, st = preprocess_text(str(text))
+        tokens.append(t)
+        no_stop.append(ns)
+        stem.append(st)
 
-    # Kolom final
-    df["processed_opinion"] = df["stem"].apply(
-        lambda x: " ".join(x)
-    )
+    df["token"] = tokens
+    df["no_stopword"] = no_stop
+    df["stem"] = stem
+    df["processed_opinion"] = stem
 
-    # Placeholder label (dipakai step berikutnya)
-    df["label_sentimen"] = ""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_excel(output_path, index=False)
 
-    # Simpan hasil
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    df.to_excel(OUTPUT_PATH, index=False, engine="openpyxl")
-
-    print("✅ Post-ABSA preprocessing selesai")
-    print(f"File disimpan di: {OUTPUT_PATH}")
-    print(
-        df[
-            ["original_review", "aspect", "opinion_word",
-             "token", "no_stopword", "stem"]
-        ].head(5)
-    )
-
-    return df
+    return output_path

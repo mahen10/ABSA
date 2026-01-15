@@ -17,9 +17,9 @@ import contractions
 # ============================
 # PATH SETTING (TIDAK DIUBAH)
 # ============================
-INPUT_PATH = os.path.join('Output', 'DataSet.xlsx')
+INPUT_PATH = os.path.join('output', 'DataSet.xlsx')
 SLANG_PATH = os.path.join('dict', 'slang.txt')
-OUTPUT_PATH = os.path.join('Output', 'cleaned_reviews.xlsx')
+output_PATH = os.path.join('output', 'cleaned_reviews.xlsx')
 
 # ============================
 # LOAD DATA
@@ -99,14 +99,14 @@ def cleaning(text):
 df['cleaned_review'] = df['normalisasi'].apply(cleaning)
 
 # ============================
-# SAVE OUTPUT
+# SAVE output
 # ============================
-df.to_excel(OUTPUT_PATH, index=False, engine='openpyxl')
+df.to_excel(output_PATH, index=False, engine='openpyxl')
 
 # ============================
-# CONTROL OUTPUT
+# CONTROL output
 # ============================
 print("Preprocessing Pra-ABSA selesai.")
 print(f"Jumlah data: {len(df)}")
 print(df[['review', 'case_folding', 'normalized', 'normalisasi', 'cleaned_review']].head(10))
-print(f"File disimpan di: {OUTPUT_PATH}")
+print(f"File disimpan di: {output_PATH}")

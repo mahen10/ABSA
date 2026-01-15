@@ -142,11 +142,12 @@ elif menu == "Analisis & Hasil":
 
     if st.button("🚀 Lakukan Analisis"):
         with st.spinner("Menjalankan pipeline penelitian..."):
-            step02.main()
-            step03.main()
-            step04.main()
-            step05.main()
-            step06.main()
+            run_step("1_preprocessing_pra_absa.py", "step02")
+            run_step("2_absa_extraction.py", "step03")
+            run_step("3_post_absa_preprocessing.py", "step04")
+            run_step("auto_lebel.py", "step05")
+            run_step("4_sentiment_classification.py", "step06")
+
 
         st.success("✅ Analisis selesai")
 
@@ -232,6 +233,7 @@ elif menu == "Analisis & Hasil":
         fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
         st.pyplot(fig)
+
 
 
 

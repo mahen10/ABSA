@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import nltk
+import importlib.util
+
 
 # ===============================
 # SAFE NLTK DOWNLOAD
@@ -230,5 +232,6 @@ elif menu == "Analisis & Hasil":
         fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
         st.pyplot(fig)
+
 
 

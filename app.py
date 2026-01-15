@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (RE-DESIGNED)
+# Streamlit App – ABSA Steam Review (FINAL & COMPLETE)
 # =====================================================
 
 import streamlit as st
@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # =====================================================
-# CONFIG
+# CONFIG & STYLE
 # =====================================================
 st.set_page_config(
     page_title="ABSA Steam Review",
@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Style Matplotlib agar lebih bagus (tidak kaku)
+# Style Matplotlib
 plt.style.use('ggplot')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,12 +57,11 @@ step04 = load_module(os.path.join(PRE_DIR, "auto_lebel.py"), "step04")
 step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "step05")
 
 # =====================================================
-# UI HEADER
+# UI HEADER & SIDEBAR
 # =====================================================
 st.title("🎮 Steam Review Analysis")
 st.markdown("---")
 
-# Sidebar untuk Upload
 with st.sidebar:
     st.header("📂 Data Input")
     uploaded_file = st.file_uploader("Upload file Excel", type=["xlsx"])
@@ -82,84 +81,99 @@ if uploaded_file and run_btn:
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # output path
+    # Define output paths
     out1 = os.path.join(OUTPUT_DIR, "02_pre_absa.xlsx")
-    out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
+    out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx") # <--- INI HASIL EXTRAKSI
     out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
     out4 = os.path.join(OUTPUT_DIR, "05_labeled.xlsx")
 
     try:
-        # STEP 1-5 (Sama seperti sebelumnya)
-        status_text.write("⏳ Sedang memproses: Preprocessing...")
+        # --- PIPELINE START ---
+        status_text.write("⏳ Step 1/5: Preprocessing...")
         progress_bar.progress(10)
         step01.run(input_path, out1)
 
-        status_text.write("⏳ Sedang memproses: Ekstraksi Aspek...")
+        status_text.write("⏳ Step 2/5: Ekstraksi Aspek (ABSA)...")
         progress_bar.progress(30)
         step02.run(out1, out2)
 
-        status_text.write("⏳ Sedang memproses: Cleaning Lanjutan...")
+        status_text.write("⏳ Step 3/5: Cleaning Lanjutan...")
         progress_bar.progress(50)
         step03.run(out2, out3)
 
-        status_text.write("⏳ Sedang memproses: Pelabelan Otomatis...")
+        status_text.write("⏳ Step 4/5: Pelabelan Otomatis...")
         progress_bar.progress(70)
         step04.run(out3, out4)
 
-        status_text.write("⏳ Sedang memproses: Klasifikasi Model...")
+        status_text.write("⏳ Step 5/5: Klasifikasi & Evaluasi Model...")
         progress_bar.progress(90)
         result = step05.run(out4, OUTPUT_DIR)
 
         progress_bar.progress(100)
         status_text.success("✅ Analisis Selesai!")
+        # --- PIPELINE END ---
 
         # =====================================================
-        # VISUALISASI DASHBOARD (DIPERBAIKI)
+        # BAGIAN BARU: PREVIEW TABEL DATA
         # =====================================================
-        df = pd.read_excel(out4)
-        df["label_text"] = df["label_text"].str.lower().str.strip()
+        st.markdown("### 🔍 Cek Data")
+        
+        # 1. Tabel Hasil Ekstraksi ABSA (Step 2) - Request Anda
+        with st.expander("📄 Klik untuk melihat Hasil Ekstraksi ABSA (Mentah)"):
+            if os.path.exists(out2):
+                df_absa = pd.read_excel(out2)
+                st.write("Berikut adalah data setelah proses ekstraksi aspek (Step 2):")
+                st.dataframe(df_absa, use_container_width=True)
+            else:
+                st.warning("File hasil ekstraksi tidak ditemukan.")
 
-        # --- 1. RINGKASAN DATA (METRICS) ---
+        # 2. Tabel Hasil Akhir + Label (Step 4)
+        df_final = pd.read_excel(out4)
+        df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
+        
+        with st.expander("🏷️ Klik untuk melihat Data Final Terlabeli"):
+             st.dataframe(df_final, use_container_width=True)
+
+        st.markdown("---")
+
+        # =====================================================
+        # VISUALISASI DASHBOARD
+        # =====================================================
         st.subheader("📌 Ringkasan Hasil")
         
-        pos = (df["label_text"] == "positive").sum()
-        neg = (df["label_text"] == "negative").sum()
-        total = len(df)
+        pos = (df_final["label_text"] == "positive").sum()
+        neg = (df_final["label_text"] == "negative").sum()
+        total = len(df_final)
         
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Data", total)
         col2.metric("Positive", pos, delta="Good", delta_color="normal")
         col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
         col4.download_button(
-            "⬇ Download Excel",
+            "⬇ Download Hasil Akhir",
             data=open(out4, "rb"),
-            file_name="hasil_analisis.xlsx",
+            file_name="hasil_analisis_final.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
         st.markdown("---")
 
-        # --- 2. GRAFIK SENTIMEN (Kiri) & CONFUSION MATRIX (Kanan) ---
+        # --- GRAFIK ---
         c_left, c_right = st.columns([1, 1])
 
         with c_left:
-            st.subheader("📊 Distribusi Sentimen Global")
-            # Membuat grafik yang lebih kecil dan rapi
+            st.subheader("📊 Distribusi Sentimen")
             fig1, ax1 = plt.subplots(figsize=(6, 3)) 
-            counts = df["label_text"].value_counts()
-            # Warna custom: Hijau untuk positif, Merah untuk negatif
+            counts = df_final["label_text"].value_counts()
             colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
-            
             counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
             ax1.set_xlabel("Jumlah")
             plt.tight_layout()
-            st.pyplot(fig1, use_container_width=False) # False agar tidak stretch terlalu besar
+            st.pyplot(fig1, use_container_width=False)
 
         with c_right:
-            st.subheader("🤖 Performa Model")
+            st.subheader("🤖 Evaluasi Model")
             st.write(f"**Akurasi: {result['accuracy']:.2%}**")
-            
-            # Tampilkan Confusion Matrix dalam bentuk DataFrame agar rapi
             cm_df = pd.DataFrame(
                 result["confusion_matrix"], 
                 index=["Aktual Neg", "Aktual Pos"], 
@@ -169,33 +183,28 @@ if uploaded_file and run_btn:
 
         st.markdown("---")
 
-        # --- 3. DISTRIBUSI PER ASPEK (DIGABUNG BIAR RAPI) ---
+        # --- GRAFIK ASPEK ---
         st.subheader("🧩 Analisis Detail Per Aspek")
         
-        # Pivot data untuk membuat Grouped Bar Chart
-        # Ini menggantikan banyak Pie Chart menjadi SATU grafik besar yang informatif
-        aspect_sentiment = df.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
+        aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
         
-        # Pastikan kolom positive/negative ada
         if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
         if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
         
-        # Plotting
-        fig2, ax2 = plt.subplots(figsize=(10, 4)) # Wide tapi pendek
+        fig2, ax2 = plt.subplots(figsize=(10, 4))
         aspect_sentiment[['positive', 'negative']].plot(
             kind='bar', 
             ax=ax2, 
-            color=['#4CAF50', '#F44336'], # Hijau & Merah
+            color=['#4CAF50', '#F44336'],
             width=0.7
         )
         
-        ax2.set_title("Perbandingan Positif vs Negatif pada Setiap Aspek")
-        ax2.set_ylabel("Jumlah Ulasan")
-        ax2.set_xlabel("Aspek Game")
+        ax2.set_title("Sentimen per Aspek")
+        ax2.set_ylabel("Jumlah")
+        ax2.set_xlabel("Aspek")
         ax2.legend(["Positive", "Negative"])
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
-        
         st.pyplot(fig2)
 
     except Exception:
@@ -203,4 +212,4 @@ if uploaded_file and run_btn:
         st.code(traceback.format_exc())
 
 elif not uploaded_file:
-    st.info("👈 Silakan upload file Excel di menu sebelah kiri untuk memulai.")
+    st.info("👈 Silakan upload file Excel di menu sebelah kiri.")

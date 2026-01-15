@@ -223,9 +223,37 @@ if start_process:
             )
             st.table(cm_df)
 
+    st.markdown("---")
+            st.subheader("🧩 Analisis Detail Per Aspek")
+            
+            # Pivot data untuk grafik
+            aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
+            
+            # Pastikan kolom positive/negative ada (untuk menghindari error jika cuma ada 1 jenis sentimen)
+            if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
+            if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
+            
+            # Plotting
+            fig2, ax2 = plt.subplots(figsize=(10, 4))
+            aspect_sentiment[['positive', 'negative']].plot(
+                kind='bar', 
+                ax=ax2, 
+                color=['#4CAF50', '#F44336'], # Hijau & Merah
+                width=0.7
+            )
+            
+            ax2.set_title("Sentimen per Aspek")
+            ax2.set_ylabel("Jumlah")
+            ax2.set_xlabel("Aspek")
+            ax2.legend(["Positive", "Negative"])
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            st.pyplot(fig2)
+
     except Exception:
         st.error("❌ Terjadi error sistem")
         st.code(traceback.format_exc())
 
 elif not start_process and not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+

@@ -46,6 +46,7 @@ def load_module(path, name):
 # =====================================================
 # LOAD MODULES
 # =====================================================
+
 step01 = load_module(os.path.join(PRE_DIR, "1_preprocessing_pra_absa.py"), "step01")
 step02 = load_module(os.path.join(PRE_DIR, "2_absa_extraction.py"), "step02")
 step03 = load_module(os.path.join(PRE_DIR, "3_post_absa_preprocessing.py"), "step03")
@@ -70,20 +71,77 @@ if uploaded_file:
 
     st.success("📁 File berhasil diupload")
 
-    if st.button("🚀 Jalankan Pipeline"):
-        try:
-            # ============================
-            # PIPELINE
-            # ============================
-            out1 = os.path.join(OUTPUT_DIR, "02_pra_absa.xlsx")
-            out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
-            out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
-            out4 = os.path.join(OUTPUT_DIR, "05_labeled.xlsx")
+if st.button("🚀 Jalankan Pipeline"):
+    progress = st.progress(0)
+    status = st.empty()
 
-            step01.run(input_path, out1)
-            step02.run(out1, out2)
-            step03.run(out2, out3)
-            step04.run(out3, out4)
+    log_box = st.expander("📜 Log Proses (Realtime)", expanded=True)
+    log_area = log_box.empty()
+    logs = []
+
+    def log(msg):
+        logs.append(msg)
+        log_area.markdown("\n".join(f"- {l}" for l in logs))
+            try:
+        # ============================
+        # STEP 1
+        # ============================
+        step_boxes[0].info("⏳ 1️⃣ Preprocessing Pra-ABSA — sedang berjalan")
+        log("Mulai preprocessing pra-ABSA")
+        progress.progress(10)
+
+        out1 = os.path.join(OUTPUT_DIR, "02_pra_absa.xlsx")
+        step01.run(input_path, out1)
+
+        step_boxes[0].success("✅ 1️⃣ Preprocessing Pra-ABSA — selesai")
+        log("Preprocessing pra-ABSA selesai")
+
+        # ============================
+        # STEP 2
+        # ============================
+        step_boxes[1].info("⏳ 2️⃣ Ekstraksi ABSA — sedang berjalan")
+        log("Mulai ekstraksi aspek & opini")
+        progress.progress(30)
+
+        out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
+        step02.run(out1, out2)
+
+        step_boxes[1].success("✅ 2️⃣ Ekstraksi ABSA — selesai")
+        log("Ekstraksi ABSA selesai")
+
+        # ============================
+        # STEP 3
+        # ============================
+        step_boxes[2].info("⏳ 3️⃣ Post-ABSA Preprocessing — sedang berjalan")
+        log("Mulai post-ABSA preprocessing")
+        progress.progress(50)
+
+        out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
+        step03.run(out2, out3)
+
+        step_boxes[2].success("✅ 3️⃣ Post-ABSA Preprocessing — selesai")
+        log("Post-ABSA preprocessing selesai")
+
+        # ============================
+        # STEP 4
+        # ============================
+        step_boxes[3].info("⏳ 4️⃣ Auto Label Sentimen — sedang berjalan")
+        log("Mulai auto labeling sentimen")
+        progress.progress(70)
+
+        out4 = os.path.join(OUTPUT_DIR, "05_labeled.xlsx")
+        step04.run(out3, out4)
+
+        step_boxes[3].success("✅ 4️⃣ Auto Label Sentimen — selesai")
+        log("Auto labeling selesai")
+
+        progress.progress(100)
+        status.success("🎉 Pipeline selesai semua!")
+
+    except Exception as e:
+        status.error("❌ Pipeline gagal")
+        st.code(traceback.format_exc())
+
 
             # ============================
             # LOAD DATA LABELED
@@ -179,3 +237,4 @@ if uploaded_file:
         except Exception:
             st.error("❌ Terjadi error")
             st.code(traceback.format_exc())
+

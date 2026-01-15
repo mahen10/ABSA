@@ -67,7 +67,6 @@ def run(input_path, output_dir):
     # ============================
     model = LogisticRegression(
         max_iter=1000,
-        class_weight="balanced",
         solver="liblinear"
     )
 

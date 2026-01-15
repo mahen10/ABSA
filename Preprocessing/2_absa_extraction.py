@@ -106,7 +106,7 @@ def valid_word(word: str) -> bool:
 def extract_aspect_opinion(text: str):
     results = []
 
-    tokens = word_tokenize(text.lower())
+    tokens = re.findall(r"\b\w+\b", text.lower())
     tagged = pos_tag(tokens)
 
     global_adjs = [

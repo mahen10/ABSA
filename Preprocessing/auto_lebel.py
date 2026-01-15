@@ -126,8 +126,14 @@ def label_sentiment(opinion_word, opinion_context, original_review=None):
 # 5. LOAD DATA
 # ===============================
 
-df = pd.read_excel(DATA_PATH, engine="openpyxl")
-print("✅ Dataset loaded:", df.shape)
+def main():
+    df = pd.read_excel(DATA_PATH, engine="openpyxl")
+    # proses labeling (TIDAK DIUBAH)
+    df.to_excel(OUTPUT_PATH, index=False)
+
+if __name__ == "__main__":
+    main()
+
 
 # ===============================
 # 6. APPLY LABELING

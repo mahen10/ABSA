@@ -1,15 +1,25 @@
 import streamlit as st
 import pandas as pd
 import os
-import subprocess
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import nltk
+
+# ===============================
+# IMPORT PIPELINE (PENTING)
+# ===============================
+from Preprocessing import (
+    _02_preprocessing_pra_absa as step02,
+    _03_absa_extraction_excel_FINAL as step03,
+    _04_post_absa_preprocessing_excel_split as step04,
+    _05_auto_label_sentiment as step05,
+    _4_sentiment_classification as step06
+)
+
 nltk.download("punkt")
 nltk.download("averaged_perceptron_tagger")
 nltk.download("stopwords")
-
 
 st.set_page_config(
     page_title="ABSA Game Review Dashboard",
@@ -74,7 +84,6 @@ elif menu == "Upload Data":
             os.makedirs("Output", exist_ok=True)
             df.to_excel(DATASET_PATH, index=False)
             st.success("✅ File berhasil disimpan")
-
             st.dataframe(df.head())
 
 # ===============================
@@ -97,22 +106,16 @@ elif menu == "Analisis & Hasil":
 
     if st.button("🚀 Lakukan Analisis"):
         with st.spinner("Menjalankan seluruh pipeline..."):
-
-            scripts = [
-                "Preprocessing/02_preprocessing_pra_absa.py",
-                "Preprocessing/03_absa_extraction_excel_FINAL.py",
-                "Preprocessing/04_post_absa_preprocessing_excel_split.py",
-                "Preprocessing/05_auto_label_sentiment.py",
-                "Preprocessing/4_sentiment_classification.py"
-            ]
-
-            for script in scripts:
-                subprocess.run(["python", script], check=True)
+            step02.main()
+            step03.main()
+            step04.main()
+            step05.main()
+            step06.main()
 
         st.success("✅ Analisis selesai")
 
     # ===============================
-    # TAMPILKAN HASIL ABSA
+    # HASIL ABSA
     # ===============================
     absa_path = os.path.join("output", "absa_output.xlsx")
     if os.path.exists(absa_path):
@@ -120,27 +123,18 @@ elif menu == "Analisis & Hasil":
         df_absa = pd.read_excel(absa_path)
         st.dataframe(df_absa.head(50))
 
-        # ===============================
-        # DISTRIBUSI ASPEK
-        # ===============================
         st.subheader("📊 Distribusi Aspek")
-
         aspect_counts = df_absa["aspect"].value_counts()
 
         col1, col2 = st.columns(2)
-
         with col1:
             fig, ax = plt.subplots()
             aspect_counts.plot(kind="bar", ax=ax)
-            ax.set_ylabel("Jumlah")
-            ax.set_title("Distribusi Aspek")
             st.pyplot(fig)
 
         with col2:
             fig, ax = plt.subplots()
             aspect_counts.plot(kind="pie", autopct="%1.1f%%", ax=ax)
-            ax.set_ylabel("")
-            ax.set_title("Proporsi Aspek")
             st.pyplot(fig)
 
     # ===============================
@@ -148,14 +142,12 @@ elif menu == "Analisis & Hasil":
     # ===============================
     labeled_path = os.path.join("output", "absa_labeled_numeric.xlsx")
     if os.path.exists(labeled_path):
-        st.subheader("📈 Evaluasi Klasifikasi")
-
+        st.subheader("📈 Distribusi Sentimen")
         df_label = pd.read_excel(labeled_path)
         sent_counts = df_label["label_text"].value_counts()
 
         fig, ax = plt.subplots()
         sent_counts.plot(kind="bar", ax=ax)
-        ax.set_title("Distribusi Sentimen")
         st.pyplot(fig)
 
     # ===============================
@@ -165,7 +157,6 @@ elif menu == "Analisis & Hasil":
     if os.path.exists(tfidf_path):
         st.subheader("🧪 Confusion Matrix")
 
-        # Ambil ulang hasil klasifikasi
         from sklearn.model_selection import train_test_split
         from sklearn.linear_model import LogisticRegression
         from sklearn.feature_extraction.text import TfidfVectorizer
@@ -202,6 +193,4 @@ elif menu == "Analisis & Hasil":
 
         fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-        ax.set_xlabel("Predicted")
-        ax.set_ylabel("Actual")
         st.pyplot(fig)

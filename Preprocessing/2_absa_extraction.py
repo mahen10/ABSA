@@ -1,5 +1,5 @@
 # =====================================================
-# FILE: Preprocessing/2_absa_extraction.py
+# FILE: 2_absa_extraction.py
 # =====================================================
 
 import pandas as pd
@@ -14,43 +14,27 @@ from nltk.corpus import stopwords
 # NLTK SAFE INIT (Ditaruh di atas dan dipanggil segera)
 # =====================================================
 def ensure_nltk():
-    """
-    Memastikan semua resource NLTK yang dibutuhkan tersedia.
-    Menambahkan "averaged_perceptron_tagger_eng" untuk support NLTK terbaru.
-    """
     resources = [
         ("tokenizers/punkt", "punkt"),
         ("tokenizers/punkt_tab", "punkt_tab"),
         ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
-        ("help/taggers/averaged_perceptron_tagger_eng", "averaged_perceptron_tagger_eng"), # <-- PERBAIKAN DI SINI
         ("corpora/stopwords", "stopwords"),
     ]
-    
-    print("--- Checking NLTK Resources ---")
     for path, name in resources:
         try:
-            # Coba cari resource (path mungkin perlu penyesuaian untuk _eng, jadi kita pakai try-except luas)
             nltk.data.find(path)
         except LookupError:
-            print(f"Downloading missing resource: {name}...")
-            try:
-                nltk.download(name, quiet=True)
-            except Exception as e:
-                print(f"Gagal download {name}: {e}")
+            print(f"Downloading {name}...") # Opsional: untuk log
+            nltk.download(name)
 
-# --- Panggil fungsi ini SEKARANG, sebelum STOPWORDS didefinisikan ---
+# --- PERBAIKAN: Panggil fungsi ini SEKARANG, sebelum STOPWORDS didefinisikan ---
 ensure_nltk() 
 
 # =====================================================
 # CONSTANTS
 # =====================================================
-try:
-    STOPWORDS = set(stopwords.words("english"))
-except LookupError:
-    # Fallback darurat jika download gagal
-    nltk.download("stopwords")
-    STOPWORDS = set(stopwords.words("english"))
-
+# Sekarang aman dijalankan karena ensure_nltk() sudah dipanggil di atas
+STOPWORDS = set(stopwords.words("english"))
 PRONOUN_BLOCKLIST = {"i", "we", "you", "they", "he", "she", "it"}
 
 CLAUSE_BREAKERS = {"but", "however", "although", "though", "yet"}
@@ -61,38 +45,11 @@ EVAL_VERBS = {
 }
 
 ASPECT_KEYWORDS = {
-     "graphics": [
-        "graphics", "graphic", "visual", "visuals", "ui", "grafis",
-        "art", "artstyle", "look", "resolution", "texture", "animation"
-    ],
-
-    "gameplay": [
-        "gameplay", "control", "controls", "mechanic", "mechanics",
-        "combat", "movement", "interact", "jump", "shoot", "run",
-        "action", "fun", "challenging", "responsive",
-        "attack", "defend", "transaction", "transactions",
-        "quest", "quests"
-    ],
-
-    "story": [
-        "story", "plot", "narrative", "lore", "writing", "dialogue",
-        "ending", "cutscene", "quest", "mission", "twist",
-        "character", "development", "script", "storyline"
-    ],
-
-    "performance": [
-        "performance", "lag", "bug", "fps", "crash", "glitch",
-        "smooth", "loading", "freeze", "stutter", "frame",
-        "drop", "optimization", "hang", "delay", "disconnect",
-        "rate", "memory",  "rendering",
-        "execution", "garbage", "collection"
-    ],
-
-    "music": [
-        "music", "sound", "audio", "sfx", "voice", "soundtrack",
-        "ost", "noise", "volume", "melody",
-        "instrumental", "harmony", "song"
-    ]
+    "graphics": ["graphics", "visual", "ui", "art", "animation"],
+    "gameplay": ["gameplay", "control", "combat", "mechanic", "quest"],
+    "story": ["story", "plot", "narrative", "lore", "dialogue"],
+    "performance": ["performance", "lag", "bug", "fps", "crash"],
+    "music": ["music", "sound", "audio", "ost"]
 }
 
 
@@ -116,18 +73,10 @@ def extract_aspect_opinion(text):
 
     # Pastikan text string
     if not isinstance(text, str):
-        text = str(text) if pd.notna(text) else ""
+        text = str(text)
 
-    if not text.strip():
-        return []
-
-    try:
-        tokens = word_tokenize(text.lower())
-        tagged = pos_tag(tokens)
-    except LookupError as e:
-        # Emergency handling jika resource masih missing saat runtime
-        print(f"NLTK Error during extraction: {e}")
-        return []
+    tokens = word_tokenize(text.lower())
+    tagged = pos_tag(tokens)
 
     global_adjs = [
         w for w, t in tagged if t.startswith("JJ") and valid_word(w)
@@ -177,7 +126,7 @@ def extract_aspect_opinion(text):
 # PIPELINE ENTRY POINT (WAJIB)
 # =====================================================
 def run(input_path, output_path):
-    print(f"--- Memulai Step 2: ABSA Extraction ---")
+    # ensure_nltk() <-- Tidak perlu di sini lagi karena sudah dipanggil di global scope
     
     # Cek apakah file ada sebelum dibaca
     if not os.path.exists(input_path):
@@ -185,31 +134,17 @@ def run(input_path, output_path):
 
     df = pd.read_excel(input_path)
     rows = []
-    
-    # Cek kolom input
-    if "cleaned_review" not in df.columns:
-        print("Warning: Kolom "cleaned_review" tidak ditemukan. Mencoba menggunakan kolom lain.")
-        # Fallback logic
-        possible_cols = ["cleaned_review", "review", "content", "text"]
-        target_col = next((c for c in possible_cols if c in df.columns), None)
-        if not target_col:
-             raise ValueError("Tidak ada kolom teks yang valid untuk diproses.")
-    else:
-        target_col = "cleaned_review"
-
-    print(f"Menggunakan kolom: {target_col}")
 
     for _, r in df.iterrows():
-        raw_text = r.get(target_col, "") 
+        # Handle jika kolom kosong/NaN
+        raw_text = r.get("cleaned_review", "") 
         text = str(raw_text) if pd.notna(raw_text) else ""
         
         matches = extract_aspect_opinion(text)
 
-        # Jika tidak ada aspek ditemukan, baris ini dilewati (atau bisa disimpan sebagai None)
-        # Di sini kita hanya menyimpan yang ada match-nya agar tabel hasil bersih
         for m in matches:
             rows.append({
-                "original_review": r.get("review", text), # Simpan review asli
+                "original_review": r.get("review", ""),
                 "cleaned_review": text,
                 "aspect": m["aspect"],
                 "opinion_word": m["opinion_word"],
@@ -219,8 +154,5 @@ def run(input_path, output_path):
     out_df = pd.DataFrame(rows)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     out_df.to_excel(output_path, index=False)
-    
-    print(f"Step 2 Selesai. Hasil: {len(out_df)} baris aspek terdeteksi.")
-    print(f"Disimpan di: {output_path}")
 
     return out_df

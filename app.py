@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (FINAL WITH MANUAL INPUT)
+# Streamlit App – ABSA Steam Review (FULL FIXED)
 # =====================================================
 
 import streamlit as st
@@ -91,9 +91,7 @@ with st.sidebar:
         if st.button("🚀 Analisis Teks", key="btn_manual"):
             if user_text.strip():
                 # --- TRIK: MEMBUAT EXCEL PALSU DARI INPUT USER ---
-                # PENTING: Ganti 'content' di bawah ini dengan nama kolom 
-                # yang biasa dibaca oleh file '1_preprocessing_pra_absa.py' Anda.
-                # Misal: 'content', 'review', 'text', atau 'ulasan'.
+                # Ganti 'content' dengan nama kolom yang sesuai jika perlu
                 df_manual = pd.DataFrame({"content": [user_text]}) 
                 
                 input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
@@ -179,7 +177,7 @@ if start_process:
         col2.metric("Positive", pos, delta="Good", delta_color="normal")
         col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
         
-        # Tombol download hanya relevan jika upload file banyak, tapi dibiarkan saja
+        # Tombol download
         with open(out4, "rb") as f:
             col4.download_button(
                 "⬇ Download Hasil",
@@ -190,10 +188,7 @@ if start_process:
 
         st.markdown("---")
 
-        # --- GRAFIK ---
-        # Untuk input manual 1 kalimat, grafik mungkin terlihat 100% satu warna, 
-        # tapi tetap kita tampilkan untuk konsistensi.
-        
+        # --- GRAFIK KIRI & KANAN ---
         c_left, c_right = st.columns([1, 1])
 
         with c_left:
@@ -212,9 +207,7 @@ if start_process:
         with c_right:
             st.subheader("🤖 Evaluasi Model")
             st.write(f"**Akurasi Dataset (Test Split): {result['accuracy']:.2%}**")
-            # Note: Confusion matrix ini dari test split dataset training terakhir,
-            # bukan dari input manual Anda saat ini.
-            st.caption("*Confusion Matrix ini berdasarkan performa model pada data latih/uji, bukan input barusan.*")
+            st.caption("*Confusion Matrix ini berdasarkan performa model pada data latih/uji.*")
             
             cm_df = pd.DataFrame(
                 result["confusion_matrix"], 
@@ -222,33 +215,34 @@ if start_process:
                 columns=["Prediksi Neg", "Prediksi Pos"]
             )
             st.table(cm_df)
-
-    st.markdown("---")
-            st.subheader("🧩 Analisis Detail Per Aspek")
-            
-            # Pivot data untuk grafik
-            aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
-            
-            # Pastikan kolom positive/negative ada (untuk menghindari error jika cuma ada 1 jenis sentimen)
-            if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
-            if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
-            
-            # Plotting
-            fig2, ax2 = plt.subplots(figsize=(10, 4))
-            aspect_sentiment[['positive', 'negative']].plot(
-                kind='bar', 
-                ax=ax2, 
-                color=['#4CAF50', '#F44336'], # Hijau & Merah
-                width=0.7
-            )
-            
-            ax2.set_title("Sentimen per Aspek")
-            ax2.set_ylabel("Jumlah")
-            ax2.set_xlabel("Aspek")
-            ax2.legend(["Positive", "Negative"])
-            plt.xticks(rotation=45, ha='right')
-            plt.tight_layout()
-            st.pyplot(fig2)
+        
+        # --- GRAFIK ASPEK (YANG TADI HILANG) ---
+        st.markdown("---")
+        st.subheader("🧩 Analisis Detail Per Aspek")
+        
+        # Pivot data untuk grafik
+        aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
+        
+        # Pastikan kolom positive/negative ada
+        if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
+        if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
+        
+        # Plotting
+        fig2, ax2 = plt.subplots(figsize=(10, 4))
+        aspect_sentiment[['positive', 'negative']].plot(
+            kind='bar', 
+            ax=ax2, 
+            color=['#4CAF50', '#F44336'], # Hijau & Merah
+            width=0.7
+        )
+        
+        ax2.set_title("Sentimen per Aspek")
+        ax2.set_ylabel("Jumlah")
+        ax2.set_xlabel("Aspek")
+        ax2.legend(["Positive", "Negative"])
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        st.pyplot(fig2)
 
     except Exception:
         st.error("❌ Terjadi error sistem")
@@ -256,4 +250,3 @@ if start_process:
 
 elif not start_process and not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
-

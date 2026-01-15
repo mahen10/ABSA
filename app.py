@@ -10,11 +10,11 @@ import nltk
 # IMPORT PIPELINE (PENTING)
 # ===============================
 from Preprocessing import (
-    1_preprocessing_pra_absa as step02,
-    2_absa_extraction as step03,
-    3_post_absa_preprocessing as step04,
+    _1_preprocessing_pra_absa as step02,
+    _2_absa_extraction as step03,
+    _3_post_absa_preprocessing as step04,
     auto_lebel as step05,
-    4_sentiment_classification as step06
+    _4_sentiment_classification as step06
 )
 
 nltk.download("punkt")
@@ -194,4 +194,5 @@ elif menu == "Analisis & Hasil":
         fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
         st.pyplot(fig)
+
 

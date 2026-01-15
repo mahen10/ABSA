@@ -21,6 +21,9 @@ download_nltk()
 # ===============================
 # LOAD MODULE DARI FILE (AMAN)
 # ===============================
+st.write("BASE_DIR:", os.getcwd())
+st.write("Isi folder BASE_DIR:", os.listdir(os.getcwd()))
+
 def load_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -221,3 +224,4 @@ elif menu == "Analisis & Hasil":
         fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
         st.pyplot(fig)
+

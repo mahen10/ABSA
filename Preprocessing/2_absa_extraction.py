@@ -1,5 +1,5 @@
 # ============================
-# FILE: 03_absa_extraction_excel_FINAL.py
+# FILE: 2_absa_extraction.py
 # ============================
 # ABSA Rule-Based
 # - POS Tagging (Adjective priority)
@@ -8,49 +8,49 @@
 # - Aman untuk review naratif panjang
 # ============================
 
-import nltk
-
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-    
 import pandas as pd
 import os
 import nltk
 from nltk import word_tokenize, pos_tag
 from nltk.corpus import stopwords
 
-# ============================
-# Download resource (sekali saja)
-# ============================
-nltk.download("punkt")
-nltk.download("averaged_perceptron_tagger")
-nltk.download("stopwords")
 
+# ============================
+# NLTK RESOURCE CHECK (AMAN CLOUD)
+# ============================
+def ensure_nltk_resources():
+    resources = [
+        ("tokenizers/punkt", "punkt"),
+        ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
+        ("corpora/stopwords", "stopwords")
+    ]
+
+    for path, name in resources:
+        try:
+            nltk.data.find(path)
+        except LookupError:
+            nltk.download(name)
+
+
+# ============================
+# CONSTANTS
+# ============================
 STOPWORDS = set(stopwords.words("english"))
 PRONOUN_BLOCKLIST = {"i", "we", "you", "they", "he", "she", "it"}
 
-# 🔴 CLAUSE BREAKERS (WAJIB)
 CLAUSE_BREAKERS = {
-    "but", "however", "although", "though", "yet","ofc"
+    "but", "however", "although", "though", "yet", "ofc"
 }
 
-# 🔴 VERB EVALUATIF TERKONTROL
 EVAL_VERBS = {
     "suck", "sucks", "hate", "love",
     "recommend", "avoid", "enjoy",
     "worth", "refund"
 }
 
-# ============================
-# 1. Load Data
-# ============================
-INPUT_PATH = os.path.join("output", "cleaned_reviews.xlsx")
-df = pd.read_excel(INPUT_PATH)
 
 # ============================
-# 2. Kamus Aspek
+# ASPECT DICTIONARY
 # ============================
 aspect_keywords = {
     'graphics': [
@@ -76,7 +76,7 @@ aspect_keywords = {
         'performance', 'lag', 'bug', 'fps', 'crash', 'glitch',
         'smooth', 'loading', 'freeze', 'stutter', 'frame',
         'drop', 'optimization', 'hang', 'delay', 'disconnect',
-        'rate', 'memory',  'rendering',
+        'rate', 'memory', 'rendering',
         'execution', 'garbage', 'collection'
     ],
 
@@ -88,12 +88,8 @@ aspect_keywords = {
 }
 
 
-ALL_ASPECT_WORDS = set(
-    kw for kws in aspect_keywords.values() for kw in kws
-)
-
 # ============================
-# 3. Validasi Kata Opini
+# VALIDASI OPINI
 # ============================
 def valid_word(word: str) -> bool:
     return (
@@ -103,8 +99,9 @@ def valid_word(word: str) -> bool:
         and len(word) > 2
     )
 
+
 # ============================
-# 4. Fungsi ABSA FINAL
+# ABSA CORE FUNCTION (TIDAK DIUBAH)
 # ============================
 def extract_aspect_opinion(text: str):
     results = []
@@ -112,7 +109,6 @@ def extract_aspect_opinion(text: str):
     tokens = word_tokenize(text.lower())
     tagged = pos_tag(tokens)
 
-    # 🔹 Global adjective (fallback TERKONTROL)
     global_adjs = [
         w for w, t in tagged
         if t.startswith("JJ") and valid_word(w)
@@ -125,9 +121,6 @@ def extract_aspect_opinion(text: str):
             if word in keywords and aspect not in used_aspects:
                 used_aspects.add(aspect)
 
-                # ============================
-                # Window + Clause Boundary
-                # ============================
                 raw_window = tagged[max(0, i-4):min(len(tagged), i+6)]
                 window = []
 
@@ -136,9 +129,6 @@ def extract_aspect_opinion(text: str):
                         break
                     window.append((w, t))
 
-                # ============================
-                # Ekstraksi Opini
-                # ============================
                 local_adjs = [
                     w for w, t in window
                     if t.startswith("JJ") and valid_word(w)
@@ -149,26 +139,18 @@ def extract_aspect_opinion(text: str):
                     if w in EVAL_VERBS
                 ]
 
-                # ============================
-                # LOGIKA FINAL (URUTAN KRITIS)
-                # ============================
-
-                # 1️⃣ PRIORITAS: adjective lokal
                 if local_adjs:
                     opinion = ", ".join(local_adjs)
                     context = " ".join(w for w, _ in window)
 
-                # 2️⃣ PRIORITAS: evaluative verb lokal
                 elif local_eval_verbs:
                     opinion = ", ".join(local_eval_verbs)
                     context = " ".join(w for w, _ in window)
 
-                # 3️⃣ FALLBACK GLOBAL (HANYA JIKA SATU)
                 elif len(global_adjs) == 1:
                     opinion = global_adjs[0]
                     context = global_adjs[0]
 
-                # 4️⃣ TIDAK ADA OPINI → SKIP
                 else:
                     continue
 
@@ -180,30 +162,42 @@ def extract_aspect_opinion(text: str):
 
     return results
 
-# ============================
-# 5. Proses Seluruh Dataset
-# ============================
-final_rows = []
-
-for _, row in df.iterrows():
-    text = str(row["cleaned_review"])
-    matches = extract_aspect_opinion(text)
-
-    for m in matches:
-        final_rows.append({
-            "original_review": row["review"],
-            "cleaned_review": text,
-            "aspect": m["aspect"],
-            "opinion_word": m["opinion_word"],
-            "opinion_context": m["opinion_context"]
-        })
 
 # ============================
-# 6. Simpan ke Excel
+# MAIN PIPELINE
 # ============================
-output_df = pd.DataFrame(final_rows)
-output_PATH = os.path.join("output", "absa_output.xlsx")
-output_df.to_excel(output_PATH, index=False)
+def run_absa_extraction():
+    ensure_nltk_resources()
 
-print("✅ ABSA FINAL SELESAI")
-print(output_df.head(10))
+    INPUT_PATH = os.path.join("Output", "cleaned_reviews.xlsx")
+    OUTPUT_PATH = os.path.join("output", "absa_output.xlsx")
+
+    if not os.path.exists(INPUT_PATH):
+        raise FileNotFoundError(f"File tidak ditemukan: {INPUT_PATH}")
+
+    df = pd.read_excel(INPUT_PATH)
+
+    final_rows = []
+
+    for _, row in df.iterrows():
+        text = str(row["cleaned_review"])
+        matches = extract_aspect_opinion(text)
+
+        for m in matches:
+            final_rows.append({
+                "original_review": row["review"],
+                "cleaned_review": text,
+                "aspect": m["aspect"],
+                "opinion_word": m["opinion_word"],
+                "opinion_context": m["opinion_context"]
+            })
+
+    output_df = pd.DataFrame(final_rows)
+
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    output_df.to_excel(OUTPUT_PATH, index=False)
+
+    print("✅ ABSA FINAL SELESAI")
+    print(output_df.head(10))
+
+    return output_df

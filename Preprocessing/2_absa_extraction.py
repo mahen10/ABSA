@@ -45,11 +45,38 @@ EVAL_VERBS = {
 }
 
 ASPECT_KEYWORDS = {
-    "graphics": ["graphics", "visual", "ui", "art", "animation"],
-    "gameplay": ["gameplay", "control", "combat", "mechanic", "quest"],
-    "story": ["story", "plot", "narrative", "lore", "dialogue"],
-    "performance": ["performance", "lag", "bug", "fps", "crash"],
-    "music": ["music", "sound", "audio", "ost"]
+       "graphics": [
+        "graphics", "graphic", "visual", "visuals", "ui", "grafis",
+        "art", "artstyle", "look", "resolution", "texture", "animation"
+    ],
+
+    "gameplay": [
+        "gameplay", "control", "controls", "mechanic", "mechanics",
+        "combat", "movement", "interact", "jump", "shoot", "run",
+        "action", "fun", "challenging", "responsive",
+        "attack", "defend", "transaction", "transactions",
+        "quest", "quests"
+    ],
+
+    "story": [
+        "story", "plot", "narrative", "lore", "writing", "dialogue",
+        "ending", "cutscene", "quest", "mission", "twist",
+        "character", "development", "script", "storyline"
+    ],
+
+    "performance": [
+        "performance", "lag", "bug", "fps", "crash", "glitch",
+        "smooth", "loading", "freeze", "stutter", "frame",
+        "drop", "optimization", "hang", "delay", "disconnect",
+        "rate", "memory",  "rendering",
+        "execution", "garbage", "collection"
+    ],
+
+    "music": [
+        "music", "sound", "audio", "sfx", "voice", "soundtrack",
+        "ost", "noise", "volume", "melody",
+        "instrumental", "harmony", "song"
+    ]
 }
 
 

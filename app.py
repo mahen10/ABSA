@@ -25,18 +25,24 @@ st.write("BASE_DIR:", os.getcwd())
 st.write("Isi folder BASE_DIR:", os.listdir(os.getcwd()))
 
 def load_module(path, name):
+    if not os.path.exists(path):
+        st.error(f"❌ File tidak ditemukan: {path}")
+        st.stop()
+
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
+
 # ===============================
 # PATH
 # ===============================
-BASE_DIR = os.getcwd()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PRE_DIR = os.path.join(BASE_DIR, "Preprocessing")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 DATASET_PATH = os.path.join(OUTPUT_DIR, "DataSet.xlsx")
+
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -224,4 +230,5 @@ elif menu == "Analisis & Hasil":
         fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
         st.pyplot(fig)
+
 

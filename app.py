@@ -44,7 +44,7 @@ def load_module(path, name):
     return module
 
 # =====================================================
-# LOAD MODULES
+# LOAD PIPELINE MODULES
 # =====================================================
 step01 = load_module(os.path.join(PRE_DIR, "1_preprocessing_pra_absa.py"), "step01")
 step02 = load_module(os.path.join(PRE_DIR, "2_absa_extraction.py"), "step02")
@@ -72,147 +72,69 @@ if uploaded_file:
 
     if st.button("🚀 Jalankan Pipeline"):
 
-    progress = st.progress(0)
-    status = st.empty()
-
-    try:
         # ============================
-        # STEP 1
+        # PATH OUTPUT
         # ============================
-        status.info("🔄 Step 1/5: Preprocessing Pra-ABSA...")
-        progress.progress(10)
-        step01.run(input_path, out1)
-        status.success("✅ Step 1 selesai")
+        out1 = os.path.join(OUTPUT_DIR, "02_pra_absa.xlsx")
+        out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
+        out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
+        out4 = os.path.join(OUTPUT_DIR, "05_labeled.xlsx")
 
-        # ============================
-        # STEP 2
-        # ============================
-        status.info("🔄 Step 2/5: Ekstraksi ABSA (Aspect & Opinion)...")
-        progress.progress(30)
-        step02.run(out1, out2)
-        status.success("✅ Step 2 selesai")
+        progress = st.progress(0)
+        status = st.empty()
 
-        # ============================
-        # STEP 3
-        # ============================
-        status.info("🔄 Step 3/5: Post-ABSA Preprocessing...")
-        progress.progress(50)
-        step03.run(out2, out3)
-        status.success("✅ Step 3 selesai")
-
-        # ============================
-        # STEP 4
-        # ============================
-        status.info("🔄 Step 4/5: Auto Label Sentimen...")
-        progress.progress(70)
-        step04.run(out3, out4)
-        status.success("✅ Step 4 selesai")
-
-        # ============================
-        # STEP 5
-        # ============================
-        status.info("🔄 Step 5/5: Klasifikasi Sentimen (LogReg)...")
-        progress.progress(90)
-        result = step05.run(out4, OUTPUT_DIR)
-        progress.progress(100)
-        status.success("🎉 Semua proses selesai!")
-
-    except Exception as e:
-        status.error("❌ Pipeline gagal")
-        st.code(traceback.format_exc())
+        try:
+            # ============================
+            # STEP 1
+            # ============================
+            status.info("🔄 Step 1/5: Preprocessing Pra-ABSA...")
+            progress.progress(10)
+            step01.run(input_path, out1)
+            status.success("✅ Step 1 selesai")
 
             # ============================
-            # LOAD DATA LABELED
+            # STEP 2
             # ============================
-            df = pd.read_excel(out4)
-            df["label_text"] = df["label_text"].str.lower().str.strip()
-
-            # ============================
-            # RINGKASAN LABEL
-            # ============================
-            total = len(df)
-            pos = (df["label_text"] == "positive").sum()
-            neg = (df["label_text"] == "negative").sum()
-            unlabeled = total - pos - neg
-
-            st.subheader("📌 Ringkasan Pelabelan")
-
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Positive", pos)
-            col2.metric("Negative", neg)
-            col3.metric("Tidak Terlabel", unlabeled)
+            status.info("🔄 Step 2/5: Ekstraksi ABSA...")
+            progress.progress(30)
+            step02.run(out1, out2)
+            status.success("✅ Step 2 selesai")
 
             # ============================
-            # BAR CHART – SEMUA ASPEK
+            # STEP 3
             # ============================
-            st.subheader("📊 Perbandingan Sentimen (Semua Aspek)")
-
-            overall = (
-                df[df["label_text"].isin(["positive", "negative"])]
-                .groupby("label_text")
-                .size()
-            )
-
-            fig, ax = plt.subplots()
-            overall.plot(kind="bar", ax=ax)
-            ax.set_xlabel("Sentimen")
-            ax.set_ylabel("Jumlah")
-            ax.set_title("Positive vs Negative (Keseluruhan)")
-            st.pyplot(fig)
+            status.info("🔄 Step 3/5: Post-ABSA Preprocessing...")
+            progress.progress(50)
+            step03.run(out2, out3)
+            status.success("✅ Step 3 selesai")
 
             # ============================
-            # PIE CHART – PER ASPEK
+            # STEP 4
             # ============================
-            st.subheader("🧩 Distribusi Sentimen per Aspek")
-
-            aspects = df["aspect"].dropna().unique()
-
-            for aspect in aspects:
-                aspect_df = df[
-                    (df["aspect"] == aspect) &
-                    (df["label_text"].isin(["positive", "negative"]))
-                ]
-
-                if aspect_df.empty:
-                    continue
-
-                counts = aspect_df["label_text"].value_counts()
-
-                fig, ax = plt.subplots()
-                ax.pie(
-                    counts,
-                    labels=counts.index,
-                    autopct="%1.1f%%",
-                    startangle=90
-                )
-                ax.set_title(f"Aspek: {aspect}")
-                st.pyplot(fig)
+            status.info("🔄 Step 4/5: Auto Label Sentimen...")
+            progress.progress(70)
+            step04.run(out3, out4)
+            status.success("✅ Step 4 selesai")
 
             # ============================
-            # DOWNLOAD
+            # STEP 5 (Klasifikasi)
             # ============================
-            with open(out4, "rb") as f:
-                st.download_button(
-                    "⬇ Download Data ABSA + Label",
-                    data=f,
-                    file_name="hasil_absa_labeled.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-            # ============================
-            # MODEL EVALUATION
-            # ============================
-            st.subheader("🤖 Evaluasi Model Klasifikasi")
+            status.info("🔄 Step 5/5: Klasifikasi Sentimen...")
+            progress.progress(90)
             result = step05.run(out4, OUTPUT_DIR)
-
-            st.metric("Akurasi Model", f"{result['accuracy']:.2%}")
-            st.dataframe(
-                pd.DataFrame(result["classification_report"]).transpose()
-            )
-            st.write("Confusion Matrix:")
-            st.write(result["confusion_matrix"])
+            progress.progress(100)
+            status.success("🎉 Semua proses selesai!")
 
         except Exception:
-            st.error("❌ Terjadi error")
+            st.error("❌ Pipeline gagal")
             st.code(traceback.format_exc())
+            st.stop()
 
+        # =====================================================
+        # VISUALISASI HASIL
+        # =====================================================
+        df = pd.read_excel(out4)
+        df["label_text"] = df["label_text"].astype(str).str.lower()
+
+        # ============================
+        # RINGKASAN

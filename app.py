@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (FINAL & COMPLETE)
+# Streamlit App – ABSA Steam Review (FINAL WITH MANUAL INPUT)
 # =====================================================
 
 import streamlit as st
@@ -62,28 +62,57 @@ step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "s
 st.title("🎮 Steam Review Analysis")
 st.markdown("---")
 
+# Variabel flag untuk trigger proses
+start_process = False
+
 with st.sidebar:
-    st.header("📂 Data Input")
-    uploaded_file = st.file_uploader("Upload file Excel", type=["xlsx"])
+    st.header("⚙️ Konfigurasi")
     
-    run_btn = False
-    if uploaded_file:
-        input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
-        with open(input_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.success("File Ready!")
-        run_btn = st.button("🚀 Jalankan Analisis", type="primary")
+    # PILIHAN MODE: UPLOAD atau MANUAL
+    input_mode = st.radio("Pilih Sumber Data:", ["📂 Upload Excel", "✍️ Input Teks Manual"])
+    
+    st.markdown("---")
+    
+    if input_mode == "📂 Upload Excel":
+        uploaded_file = st.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"])
+        if uploaded_file:
+            input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
+            with open(input_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.success("File Terupload!")
+            if st.button("🚀 Jalankan Analisis", key="btn_upload"):
+                start_process = True
+
+    elif input_mode == "✍️ Input Teks Manual":
+        st.info("Ketik ulasan game di bawah ini untuk dianalisis langsung.")
+        # Text Area untuk input manual
+        user_text = st.text_area("Masukkan Review Game:", height=150, placeholder="Contoh: Game ini grafiknya bagus banget, tapi harganya terlalu mahal.")
+        
+        if st.button("🚀 Analisis Teks", key="btn_manual"):
+            if user_text.strip():
+                # --- TRIK: MEMBUAT EXCEL PALSU DARI INPUT USER ---
+                # PENTING: Ganti 'content' di bawah ini dengan nama kolom 
+                # yang biasa dibaca oleh file '1_preprocessing_pra_absa.py' Anda.
+                # Misal: 'content', 'review', 'text', atau 'ulasan'.
+                df_manual = pd.DataFrame({"content": [user_text]}) 
+                
+                input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
+                df_manual.to_excel(input_path, index=False)
+                
+                start_process = True
+            else:
+                st.warning("Mohon isi teks terlebih dahulu.")
 
 # =====================================================
-# MAIN PROCESS
+# MAIN PROCESS LOGIC
 # =====================================================
-if uploaded_file and run_btn:
+if start_process:
     progress_bar = st.progress(0)
     status_text = st.empty()
 
     # Define output paths
     out1 = os.path.join(OUTPUT_DIR, "02_pre_absa.xlsx")
-    out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx") # <--- INI HASIL EXTRAKSI
+    out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
     out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
     out4 = os.path.join(OUTPUT_DIR, "05_labeled.xlsx")
 
@@ -114,26 +143,26 @@ if uploaded_file and run_btn:
         # --- PIPELINE END ---
 
         # =====================================================
-        # BAGIAN BARU: PREVIEW TABEL DATA
+        # BAGIAN: PREVIEW TABEL DATA
         # =====================================================
-        st.markdown("### 🔍 Cek Data")
+        st.markdown("### 🔍 Deteksi Aspek & Sentimen")
         
-        # 1. Tabel Hasil Ekstraksi ABSA (Step 2) - Request Anda
-        with st.expander("📄 Klik untuk melihat Hasil Ekstraksi ABSA (Mentah)"):
-            if os.path.exists(out2):
-                df_absa = pd.read_excel(out2)
-                st.write("Berikut adalah data setelah proses ekstraksi aspek (Step 2):")
-                st.dataframe(df_absa, use_container_width=True)
+        # Cek hasil ekstraksi
+        if os.path.exists(out4):
+            df_final = pd.read_excel(out4)
+            df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
+            
+            # Jika mode manual, tampilkan tabel lebih sederhana
+            if input_mode == "✍️ Input Teks Manual":
+                st.info("Berikut adalah hasil pembedahan kalimat Anda:")
+                # Tampilkan kolom penting saja agar user fokus
+                cols_to_show = [col for col in df_final.columns if col in ['aspect', 'processed_opinion', 'label_text', 'sentiment_score']]
+                st.table(df_final[cols_to_show])
             else:
-                st.warning("File hasil ekstraksi tidak ditemukan.")
-
-        # 2. Tabel Hasil Akhir + Label (Step 4)
-        df_final = pd.read_excel(out4)
-        df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
+                # Mode upload file (tampilkan expander seperti biasa)
+                with st.expander("🏷️ Klik untuk melihat Data Final Terlabeli"):
+                     st.dataframe(df_final, use_container_width=True)
         
-        with st.expander("🏷️ Klik untuk melihat Data Final Terlabeli"):
-             st.dataframe(df_final, use_container_width=True)
-
         st.markdown("---")
 
         # =====================================================
@@ -149,16 +178,22 @@ if uploaded_file and run_btn:
         col1.metric("Total Data", total)
         col2.metric("Positive", pos, delta="Good", delta_color="normal")
         col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
-        col4.download_button(
-            "⬇ Download Hasil Akhir",
-            data=open(out4, "rb"),
-            file_name="hasil_analisis_final.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        
+        # Tombol download hanya relevan jika upload file banyak, tapi dibiarkan saja
+        with open(out4, "rb") as f:
+            col4.download_button(
+                "⬇ Download Hasil",
+                data=f,
+                file_name="hasil_analisis.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
         st.markdown("---")
 
         # --- GRAFIK ---
+        # Untuk input manual 1 kalimat, grafik mungkin terlihat 100% satu warna, 
+        # tapi tetap kita tampilkan untuk konsistensi.
+        
         c_left, c_right = st.columns([1, 1])
 
         with c_left:
@@ -166,14 +201,21 @@ if uploaded_file and run_btn:
             fig1, ax1 = plt.subplots(figsize=(6, 3)) 
             counts = df_final["label_text"].value_counts()
             colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
-            counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
+            
+            if not counts.empty:
+                counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
+            
             ax1.set_xlabel("Jumlah")
             plt.tight_layout()
             st.pyplot(fig1, use_container_width=False)
 
         with c_right:
             st.subheader("🤖 Evaluasi Model")
-            st.write(f"**Akurasi: {result['accuracy']:.2%}**")
+            st.write(f"**Akurasi Dataset (Test Split): {result['accuracy']:.2%}**")
+            # Note: Confusion matrix ini dari test split dataset training terakhir,
+            # bukan dari input manual Anda saat ini.
+            st.caption("*Confusion Matrix ini berdasarkan performa model pada data latih/uji, bukan input barusan.*")
+            
             cm_df = pd.DataFrame(
                 result["confusion_matrix"], 
                 index=["Aktual Neg", "Aktual Pos"], 
@@ -181,35 +223,9 @@ if uploaded_file and run_btn:
             )
             st.table(cm_df)
 
-        st.markdown("---")
-
-        # --- GRAFIK ASPEK ---
-        st.subheader("🧩 Analisis Detail Per Aspek")
-        
-        aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
-        
-        if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
-        if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
-        
-        fig2, ax2 = plt.subplots(figsize=(10, 4))
-        aspect_sentiment[['positive', 'negative']].plot(
-            kind='bar', 
-            ax=ax2, 
-            color=['#4CAF50', '#F44336'],
-            width=0.7
-        )
-        
-        ax2.set_title("Sentimen per Aspek")
-        ax2.set_ylabel("Jumlah")
-        ax2.set_xlabel("Aspek")
-        ax2.legend(["Positive", "Negative"])
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        st.pyplot(fig2)
-
     except Exception:
         st.error("❌ Terjadi error sistem")
         st.code(traceback.format_exc())
 
-elif not uploaded_file:
+elif not start_process and not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")

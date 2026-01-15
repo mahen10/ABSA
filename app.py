@@ -54,6 +54,7 @@ step03 = load_module(
     "step03"
 )
 
+
 step04 = load_module(
     os.path.join(PRE_DIR, "auto_lebel.py"),
     "step04"
@@ -118,3 +119,4 @@ if uploaded_file:
         except Exception as e:
             st.error("Terjadi error saat menjalankan pipeline")
             st.exception(e)
+

@@ -195,8 +195,8 @@ for _, row in df.iterrows():
 # 6. Simpan ke Excel
 # ============================
 output_df = pd.DataFrame(final_rows)
-OUTPUT_PATH = os.path.join("output", "absa_output.xlsx")
-output_df.to_excel(OUTPUT_PATH, index=False)
+output_PATH = os.path.join("output", "absa_output.xlsx")
+output_df.to_excel(output_PATH, index=False)
 
 print("✅ ABSA FINAL SELESAI")
 print(output_df.head(10))

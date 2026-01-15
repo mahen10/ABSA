@@ -8,6 +8,13 @@
 # - Aman untuk review naratif panjang
 # ============================
 
+import nltk
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+    
 import pandas as pd
 import os
 import nltk

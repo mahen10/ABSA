@@ -92,8 +92,7 @@ def run(input_path, output_path):
     Fungsi utama yang dipanggil oleh app.py
     Menerima input_path dan output_path dari app.py
     """
-    print("--- Memulai 
-    Step 1: Preprocessing Pra-ABSA ---")
+    print("--- Memulai Step 1: Preprocessing Pra-ABSA ---")
 
     # 1. Setup Path untuk Slang Dictionary
     # Asumsi struktur folder:

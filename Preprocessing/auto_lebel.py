@@ -17,7 +17,7 @@ import numpy as np
 UMIGON_PATH = "dict/umigon-lexicon.tsv.txt"
 VADER_PATH = "dict/vader_lexicon.txt"
 DATA_PATH = "output/absa_processed.xlsx"
-OUTPUT_PATH = "output/absa_labeled_numeric.xlsx"
+output_PATH = "output/absa_labeled_numeric.xlsx"
 
 # ===============================
 # 1. LOAD UMIGON LEXICON
@@ -129,7 +129,7 @@ def label_sentiment(opinion_word, opinion_context, original_review=None):
 def main():
     df = pd.read_excel(DATA_PATH, engine="openpyxl")
     # proses labeling (TIDAK DIUBAH)
-    df.to_excel(OUTPUT_PATH, index=False)
+    df.to_excel(output_PATH, index=False)
 
 if __name__ == "__main__":
     main()
@@ -164,8 +164,8 @@ print("\n📊 Label distribution (numeric):")
 print(df["label_sentimen"].value_counts(dropna=False))
 
 # ===============================
-# 8. SAVE OUTPUT
+# 8. SAVE output
 # ===============================
 
-df.to_excel(OUTPUT_PATH, index=False, engine="openpyxl")
-print("\n📁 File disimpan di:", OUTPUT_PATH)
+df.to_excel(output_PATH, index=False, engine="openpyxl")
+print("\n📁 File disimpan di:", output_PATH)

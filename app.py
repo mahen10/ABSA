@@ -71,19 +71,55 @@ if uploaded_file:
     st.success("📁 File berhasil diupload")
 
     if st.button("🚀 Jalankan Pipeline"):
-        try:
-            # ============================
-            # PIPELINE
-            # ============================
-            out1 = os.path.join(OUTPUT_DIR, "02_pra_absa.xlsx")
-            out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
-            out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
-            out4 = os.path.join(OUTPUT_DIR, "05_labeled.xlsx")
 
-            step01.run(input_path, out1)
-            step02.run(out1, out2)
-            step03.run(out2, out3)
-            step04.run(out3, out4)
+    progress = st.progress(0)
+    status = st.empty()
+
+    try:
+        # ============================
+        # STEP 1
+        # ============================
+        status.info("🔄 Step 1/5: Preprocessing Pra-ABSA...")
+        progress.progress(10)
+        step01.run(input_path, out1)
+        status.success("✅ Step 1 selesai")
+
+        # ============================
+        # STEP 2
+        # ============================
+        status.info("🔄 Step 2/5: Ekstraksi ABSA (Aspect & Opinion)...")
+        progress.progress(30)
+        step02.run(out1, out2)
+        status.success("✅ Step 2 selesai")
+
+        # ============================
+        # STEP 3
+        # ============================
+        status.info("🔄 Step 3/5: Post-ABSA Preprocessing...")
+        progress.progress(50)
+        step03.run(out2, out3)
+        status.success("✅ Step 3 selesai")
+
+        # ============================
+        # STEP 4
+        # ============================
+        status.info("🔄 Step 4/5: Auto Label Sentimen...")
+        progress.progress(70)
+        step04.run(out3, out4)
+        status.success("✅ Step 4 selesai")
+
+        # ============================
+        # STEP 5
+        # ============================
+        status.info("🔄 Step 5/5: Klasifikasi Sentimen (LogReg)...")
+        progress.progress(90)
+        result = step05.run(out4, OUTPUT_DIR)
+        progress.progress(100)
+        status.success("🎉 Semua proses selesai!")
+
+    except Exception as e:
+        status.error("❌ Pipeline gagal")
+        st.code(traceback.format_exc())
 
             # ============================
             # LOAD DATA LABELED
@@ -179,3 +215,4 @@ if uploaded_file:
         except Exception:
             st.error("❌ Terjadi error")
             st.code(traceback.format_exc())
+

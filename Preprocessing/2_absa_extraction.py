@@ -1,7 +1,6 @@
 # =====================================================
 # FILE: 2_absa_extraction.py
 # =====================================================
-
 import pandas as pd
 import os
 import nltk
@@ -11,39 +10,39 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
 # =====================================================
-# NLTK SAFE INIT (Ditaruh di atas dan dipanggil segera)
+# NLTK SAFE INIT
 # =====================================================
 def ensure_nltk():
     resources = [
         ("tokenizers/punkt", "punkt"),
         ("tokenizers/punkt_tab", "punkt_tab"),
         ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
+        ("taggers/averaged_perceptron_tagger_eng", "averaged_perceptron_tagger_eng"),
         ("corpora/stopwords", "stopwords"),
     ]
     for path, name in resources:
         try:
             nltk.data.find(path)
         except LookupError:
-            print(f"Downloading {name}...") # Opsional: untuk log
-            nltk.download(name)
+            try:
+                print(f"Downloading {name}...")
+                nltk.download(name, quiet=True)
+            except Exception as e:
+                print(f"Warning: Could not download {name}: {e}")
 
-# --- PERBAIKAN: Panggil fungsi ini SEKARANG, sebelum STOPWORDS didefinisikan ---
-ensure_nltk() 
+# Initialize NLTK resources before using them
+ensure_nltk()
 
 # =====================================================
 # CONSTANTS
 # =====================================================
-# Sekarang aman dijalankan karena ensure_nltk() sudah dipanggil di atas
 STOPWORDS = set(stopwords.words("english"))
 PRONOUN_BLOCKLIST = {"i", "we", "you", "they", "he", "she", "it"}
-
 CLAUSE_BREAKERS = {"but", "however", "although", "though", "yet"}
-
 EVAL_VERBS = {
     "love", "hate", "recommend", "avoid", "enjoy",
     "worth", "refund", "suck", "sucks"
 }
-
 ASPECT_KEYWORDS = {
        "graphics": [
         "graphics", "graphic", "visual", "visuals", "ui", "grafis",
@@ -79,7 +78,6 @@ ASPECT_KEYWORDS = {
     ]
 }
 
-
 # =====================================================
 # UTIL
 # =====================================================
@@ -91,46 +89,32 @@ def valid_word(w):
         and len(w) > 2
     )
 
-
 # =====================================================
 # ABSA CORE
 # =====================================================
 def extract_aspect_opinion(text):
     results = []
-
-    # Pastikan text string
-    if not isinstance(text, str):
-        text = str(text)
-
     tokens = word_tokenize(text.lower())
     tagged = pos_tag(tokens)
-
     global_adjs = [
         w for w, t in tagged if t.startswith("JJ") and valid_word(w)
     ]
-
     used_aspects = set()
-
     for i, (word, _) in enumerate(tagged):
         for aspect, keys in ASPECT_KEYWORDS.items():
             if word in keys and aspect not in used_aspects:
                 used_aspects.add(aspect)
-
                 window = tagged[max(0, i-4): i+6]
-
                 filtered = []
                 for w, t in window:
                     if w in CLAUSE_BREAKERS:
                         break
                     filtered.append((w, t))
-
                 local_adj = [
                     w for w, t in filtered
                     if t.startswith("JJ") and valid_word(w)
                 ]
-
                 local_eval = [w for w, _ in filtered if w in EVAL_VERBS]
-
                 if local_adj:
                     opinion = ", ".join(local_adj)
                 elif local_eval:
@@ -139,47 +123,31 @@ def extract_aspect_opinion(text):
                     opinion = global_adjs[0]
                 else:
                     continue
-
                 results.append({
                     "aspect": aspect,
                     "opinion_word": opinion,
                     "opinion_context": " ".join(w for w, _ in filtered)
                 })
-
     return results
-
 
 # =====================================================
 # PIPELINE ENTRY POINT (WAJIB)
 # =====================================================
 def run(input_path, output_path):
-    # ensure_nltk() <-- Tidak perlu di sini lagi karena sudah dipanggil di global scope
-    
-    # Cek apakah file ada sebelum dibaca
-    if not os.path.exists(input_path):
-        raise FileNotFoundError(f"File input tidak ditemukan: {input_path}")
-
     df = pd.read_excel(input_path)
     rows = []
-
     for _, r in df.iterrows():
-        # Handle jika kolom kosong/NaN
-        raw_text = r.get("cleaned_review", "") 
-        text = str(raw_text) if pd.notna(raw_text) else ""
-        
+        text = str(r["cleaned_review"])
         matches = extract_aspect_opinion(text)
-
         for m in matches:
             rows.append({
-                "original_review": r.get("review", ""),
+                "original_review": r["review"],
                 "cleaned_review": text,
                 "aspect": m["aspect"],
                 "opinion_word": m["opinion_word"],
                 "opinion_context": m["opinion_context"]
             })
-
     out_df = pd.DataFrame(rows)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     out_df.to_excel(output_path, index=False)
-
     return out_df

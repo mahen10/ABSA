@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: 2_absa_extraction.py
-# FIXED: Column Naming Consistency (opinion_word)
+# FIXED: Use Original Text (No Stemming) + Column Name Fix
 # =====================================================
 import pandas as pd
 import os
@@ -71,30 +71,43 @@ ASPECT_KEYWORDS = {
     ]
 }
 
-# Regex untuk memecah kalimat menjadi klausa terpisah
+# Regex untuk memecah kalimat menjadi klausa
 CLAUSE_SPLIT_PATTERN = r'[.,!?;]| but | however | although | though | yet | while | whereas | except '
 
 # =====================================================
 # UTIL
 # =====================================================
 def valid_word(w):
+    # Kita izinkan kata panjang > 2 huruf
     return (
         w.isalpha() 
         and w not in STOPWORDS 
         and len(w) > 2
     )
 
+def light_clean(text):
+    """Membersihkan teks asli tanpa stemming agar enak dibaca"""
+    if not isinstance(text, str):
+        return ""
+    # Lowercase
+    text = text.lower()
+    # Hapus karakter aneh tapi biarkan tanda baca penting untuk pemisah klausa
+    text = re.sub(r'[^a-z0-9\s.,!?;]', '', text) 
+    return text
+
 # =====================================================
 # ABSA CORE
 # =====================================================
 def extract_aspect_opinion(text):
-    if not isinstance(text, str):
+    if not text:
         return []
 
     results = []
-    text = text.lower()
     
-    # Pecah kalimat menjadi segmen-segmen kecil (Klausa)
+    # Bersihkan ringan (TANPA STEMMING)
+    text = light_clean(text)
+    
+    # Pecah kalimat menjadi segmen (Klausa)
     clauses = re.split(CLAUSE_SPLIT_PATTERN, text)
     
     seen_aspects_in_text = set()
@@ -107,7 +120,8 @@ def extract_aspect_opinion(text):
         tokens = word_tokenize(clause)
         tagged = pos_tag(tokens)
         
-        # Cari semua kata sifat (JJ), Verb (VB), Adverb (RB)
+        # Cari kata sifat (JJ), Verb (VB), Adverb (RB)
+        # Karena teks asli, NLTK akan lebih akurat mendeteksi Adjective (misal: "addictive" vs "addict")
         potential_opinions = []
         for w, t in tagged:
             if (t.startswith("JJ") or t.startswith("VB") or t.startswith("RB")) and valid_word(w):
@@ -123,10 +137,14 @@ def extract_aspect_opinion(text):
             if found_aspect:
                 break
         
-        # JIKA di klausa ini ada ASPEK dan ada OPINI
+        # Simpan jika ada pasangan Aspek + Opini
         if found_aspect and potential_opinions:
+            # Opsional: Mencegah duplikat aspek dalam satu review
+            # if found_aspect in seen_aspects_in_text: continue
+            
             seen_aspects_in_text.add(found_aspect)
             
+            # Gabungkan opini jadi string cantik (misal: "smooth, addictive")
             opinion_str = ", ".join(potential_opinions)
             
             results.append({
@@ -151,36 +169,48 @@ def run(input_path, output_path):
 
     rows = []
     
-    # Pastikan kolom cleaned_review ada, kalau tidak pakai review asli
-    target_col = "cleaned_review" if "cleaned_review" in df.columns else "review"
+    # === PERBAIKAN LOGIKA SUMBER DATA ===
+    # Kita prioritaskan kolom 'review' (teks asli) daripada 'cleaned_review'.
+    # Kenapa? Karena 'cleaned_review' dari Step 1 mungkin sudah kena Stemming (addictive -> addict).
+    # Kita ingin hasil ekstraksi tetap utuh ("addictive").
     
+    source_col = "review" # Default ke review asli
+    if "review" not in df.columns:
+        # Fallback jika tidak ada kolom review (misal nama kolomnya 'content' atau 'text')
+        # Coba cari kolom lain yang mungkin berisi teks asli
+        alternatives = ["content", "text", "body", "ulasan", "cleaned_review"]
+        for alt in alternatives:
+            if alt in df.columns:
+                source_col = alt
+                break
+    
+    print(f"Using column '{source_col}' for aspect extraction (to keep words natural).")
+
     for _, r in df.iterrows():
-        text = str(r.get(target_col, ""))
+        # Ambil teks
+        text = str(r.get(source_col, ""))
         
-        if text.strip() == "" or text.lower() == "nan":
+        # Skip kosong
+        if not text.strip() or text.lower() == "nan":
             continue
 
+        # Ekstraksi
         matches = extract_aspect_opinion(text)
         
         for m in matches:
             rows.append({
                 "original_review": r.get("review", text),
-                # PERBAIKAN UTAMA: Mengganti nama kolom kembali ke 'opinion_word'
-                "opinion_word": m["opinion_word"], 
+                "opinion_word": m["opinion_word"],   # Hasil: "smooth, addictive" (utuh)
+                "processed_opinion": m["opinion_word"], # Backup untuk Step 5
                 "aspect": m["aspect"],
                 "opinion_context": m["opinion_context"]
             })
             
     if not rows:
         print("Warning: No aspects extracted!")
-        # Fallback empty dataframe dengan kolom yang BENAR
-        out_df = pd.DataFrame(columns=["original_review", "opinion_word", "aspect", "opinion_context"])
+        out_df = pd.DataFrame(columns=["original_review", "opinion_word", "processed_opinion", "aspect", "opinion_context"])
     else:
         out_df = pd.DataFrame(rows)
-    
-    # Copy kolom opinion_word ke processed_opinion juga untuk jaga-jaga (Step 5 butuh processed_opinion)
-    if "opinion_word" in out_df.columns:
-        out_df["processed_opinion"] = out_df["opinion_word"]
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     out_df.to_excel(output_path, index=False)

@@ -91,7 +91,7 @@ def run(input_path, output_dir):
     # ============================
     # Ganti solver ke 'lbfgs' karena 'liblinear' sering error pada multiclass/data kecil
     model = LogisticRegression(
-        max_iter=1000,
+        max_iter=3000,
         class_weight="balanced",   # Class Wight
         solver="lbfgs"  # <--- INI PERBAIKAN UTAMANYA
     )

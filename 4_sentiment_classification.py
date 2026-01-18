@@ -42,26 +42,45 @@ def run(input_path, output_dir):
     y = df["label_text"]
     
     # ============================
-    # TF-IDF (RINGAN)
+    # TF-IDF (RINGAN) - FIXED
     # ============================
+    # PERBAIKAN: Set parameter dinamis agar tidak error pada data sedikit
+    n_samples = len(X)
+    use_min_df = 3 if n_samples >= 10 else 1
+    use_max_df = 0.9 if n_samples >= 10 else 1.0
+
     tfidf = TfidfVectorizer(
         ngram_range=(1, 2),
-        max_df=0.9,
-        min_df=3,
+        max_df=use_max_df,
+        min_df=use_min_df,
         stop_words="english"
     )
     X_tfidf = tfidf.fit_transform(X)
     
     # ============================
-    # Train-Test Split
+    # Train-Test Split - FIXED
     # ============================
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_tfidf,
-        y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y
-    )
+    # PERBAIKAN: Jika data terlalu sedikit (<5), jangan dipisah (pakai data full untuk train & test)
+    # Ini trik agar fitur 'Input Manual' (1 kalimat) tetap jalan tanpa error
+    if n_samples < 5:
+        X_train, X_test, y_train, y_test = X_tfidf, X_tfidf, y, y
+    else:
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_tfidf,
+                y,
+                test_size=0.2,
+                random_state=42,
+                stratify=y
+            )
+        except ValueError:
+            # Fallback jika stratify gagal (misal cuma ada 1 kelas 'positive' saja)
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_tfidf,
+                y,
+                test_size=0.2,
+                random_state=42
+            )
     
     # ============================
     # Logistic Regression
@@ -165,7 +184,12 @@ def plot_confusion_matrix_elegant(cm):
     labels = ['Negative', 'Positive']
     
     # Hitung percentages
-    cm_percent = cm.astype('float') / cm.sum(axis=1)[:, None] * 100
+    if cm.sum() > 0:
+        cm_percent = cm.astype('float') / cm.sum(axis=1)[:, None] * 100
+        # Handle division by zero/NaN for text display
+        cm_percent = pd.DataFrame(cm_percent).fillna(0).values
+    else:
+        cm_percent = cm
     
     # Custom text dengan angka dan persen
     text = [[f"{cm[i][j]}<br>({cm_percent[i][j]:.1f}%)" 
@@ -205,7 +229,8 @@ def plot_class_metrics_elegant(report):
     """Bar chart metrics per class - elegant & compact"""
     
     # Extract metrics untuk positive dan negative saja
-    classes = ['negative', 'positive']
+    # Cek apakah class ada di report (untuk menghindari error key error)
+    classes = [c for c in ['negative', 'positive'] if c in report]
     metrics = ['precision', 'recall', 'f1-score']
     
     data = []
@@ -213,7 +238,7 @@ def plot_class_metrics_elegant(report):
         values = [report[cls][metric] for cls in classes]
         data.append(go.Bar(
             name=metric.capitalize(),
-            x=['Negative', 'Positive'],
+            x=[c.capitalize() for c in classes],
             y=values,
             text=[f'{v:.2%}' for v in values],
             textposition='auto',

@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (FULL FIXED)
+# Streamlit App – ABSA Steam Review (BUG FIXED)
 # =====================================================
 
 import streamlit as st
@@ -62,8 +62,9 @@ step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "s
 st.title("🎮 Steam Review Analysis")
 st.markdown("---")
 
-# Variabel flag untuk trigger proses
+# Variabel flag global (inisialisasi awal)
 start_process = False
+uploaded_file = None  # <--- PERBAIKAN 1: Inisialisasi variabel agar tidak NameError
 
 with st.sidebar:
     st.header("⚙️ Konfigurasi")
@@ -91,8 +92,8 @@ with st.sidebar:
         if st.button("🚀 Analisis Teks", key="btn_manual"):
             if user_text.strip():
                 # --- TRIK: MEMBUAT EXCEL PALSU DARI INPUT USER ---
-                # Ganti 'content' dengan nama kolom yang sesuai jika perlu
-                df_manual = pd.DataFrame({"content": [user_text]}) 
+                # PERBAIKAN 2: Menggunakan nama kolom 'review' sesuai file preprocessing Anda
+                df_manual = pd.DataFrame({"review": [user_text]}) 
                 
                 input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
                 df_manual.to_excel(input_path, index=False)
@@ -216,7 +217,7 @@ if start_process:
             )
             st.table(cm_df)
         
-        # --- GRAFIK ASPEK (YANG TADI HILANG) ---
+        # --- GRAFIK ASPEK ---
         st.markdown("---")
         st.subheader("🧩 Analisis Detail Per Aspek")
         
@@ -248,5 +249,6 @@ if start_process:
         st.error("❌ Terjadi error sistem")
         st.code(traceback.format_exc())
 
-elif not start_process and not uploaded_file and input_mode == "📂 Upload Excel":
+# PERBAIKAN 3: Logika pengecekan yang aman
+elif not start_process and uploaded_file is None and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")

@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: 2_absa_extraction.py
-# FIXED: Clause-Based Aspect Extraction
+# FIXED: Column Naming Consistency (opinion_word)
 # =====================================================
 import pandas as pd
 import os
@@ -34,10 +34,8 @@ def ensure_nltk():
 ensure_nltk()
 
 # =====================================================
-# CONSTANTS (PERBAIKAN KAMUS)
+# CONSTANTS
 # =====================================================
-# HAPUS KATA SIFAT (Adjective) DARI SINI! 
-# Aspect Keywords harus KATA BENDA (Noun) atau fitur game.
 STOPWORDS = set(stopwords.words("english"))
 
 ASPECT_KEYWORDS = {
@@ -64,8 +62,6 @@ ASPECT_KEYWORDS = {
         "performance", "fps", "frame", "rate", "optimization", 
         "memory", "rendering", "loading", "server", "connection",
         "ping", "latency", "bug", "glitch", "crash", "freeze" 
-        # Note: "lag" dan "stutter" dipindah ke opini/indikator negatif, 
-        # tapi bisa jadi keyword jika user bilang "the lag is bad"
     ],
 
     "music": [
@@ -76,7 +72,6 @@ ASPECT_KEYWORDS = {
 }
 
 # Regex untuk memecah kalimat menjadi klausa terpisah
-# Memecah saat ketemu: titik, koma, tanda tanya, seru, atau kata hubung kontras
 CLAUSE_SPLIT_PATTERN = r'[.,!?;]| but | however | although | though | yet | while | whereas | except '
 
 # =====================================================
@@ -90,7 +85,7 @@ def valid_word(w):
     )
 
 # =====================================================
-# ABSA CORE (LOGIKA BARU)
+# ABSA CORE
 # =====================================================
 def extract_aspect_opinion(text):
     if not isinstance(text, str):
@@ -99,9 +94,7 @@ def extract_aspect_opinion(text):
     results = []
     text = text.lower()
     
-    # 1. Pecah kalimat menjadi segmen-segmen kecil (Klausa)
-    # Contoh: "Gameplay is good but graphics are bad" 
-    # Menjadi: ["Gameplay is good", "graphics are bad"]
+    # Pecah kalimat menjadi segmen-segmen kecil (Klausa)
     clauses = re.split(CLAUSE_SPLIT_PATTERN, text)
     
     seen_aspects_in_text = set()
@@ -114,39 +107,32 @@ def extract_aspect_opinion(text):
         tokens = word_tokenize(clause)
         tagged = pos_tag(tokens)
         
-        # Cari semua kata sifat (JJ) dan kata kerja (VB) yang relevan di klausa ini
-        # Kita ambil JJ (adjective), RB (adverb - "really"), VB (verb - "sucks")
+        # Cari semua kata sifat (JJ), Verb (VB), Adverb (RB)
         potential_opinions = []
         for w, t in tagged:
             if (t.startswith("JJ") or t.startswith("VB") or t.startswith("RB")) and valid_word(w):
                 potential_opinions.append(w)
         
-        # Cari aspek apa yang dibahas di klausa ini
+        # Cari aspek
         found_aspect = None
-        
-        # Cek setiap kata di klausa apakah match dengan keyword aspek
         for w_clause in tokens:
             for aspect, keys in ASPECT_KEYWORDS.items():
                 if w_clause in keys:
                     found_aspect = aspect
-                    break # Prioritas aspek pertama yang ketemu di klausa
+                    break 
             if found_aspect:
                 break
         
         # JIKA di klausa ini ada ASPEK dan ada OPINI
         if found_aspect and potential_opinions:
-            # Agar tidak duplikat aspek dalam satu review (opsional)
-            # if found_aspect in seen_aspects_in_text: continue
-            
             seen_aspects_in_text.add(found_aspect)
             
-            # Gabungkan opini menjadi string
             opinion_str = ", ".join(potential_opinions)
             
             results.append({
                 "aspect": found_aspect,
                 "opinion_word": opinion_str,
-                "opinion_context": clause # Konteksnya sekarang per klausa, lebih rapi
+                "opinion_context": clause
             })
 
     return results
@@ -171,41 +157,33 @@ def run(input_path, output_path):
     for _, r in df.iterrows():
         text = str(r.get(target_col, ""))
         
-        # Skip jika teks kosong/nan
         if text.strip() == "" or text.lower() == "nan":
             continue
 
         matches = extract_aspect_opinion(text)
         
-        # Jika tidak ada aspek terdeteksi, biarkan kosong atau label 'general'
-        # Di sini kita hanya simpan yang ada match
         for m in matches:
             rows.append({
                 "original_review": r.get("review", text),
-                "processed_opinion": m["opinion_word"], # Digunakan untuk prediksi sentimen nanti
+                # PERBAIKAN UTAMA: Mengganti nama kolom kembali ke 'opinion_word'
+                "opinion_word": m["opinion_word"], 
                 "aspect": m["aspect"],
                 "opinion_context": m["opinion_context"]
             })
             
     if not rows:
         print("Warning: No aspects extracted!")
-        # Buat dataframe kosong agar tidak error
-        out_df = pd.DataFrame(columns=["original_review", "processed_opinion", "aspect", "opinion_context"])
+        # Fallback empty dataframe dengan kolom yang BENAR
+        out_df = pd.DataFrame(columns=["original_review", "opinion_word", "aspect", "opinion_context"])
     else:
         out_df = pd.DataFrame(rows)
+    
+    # Copy kolom opinion_word ke processed_opinion juga untuk jaga-jaga (Step 5 butuh processed_opinion)
+    if "opinion_word" in out_df.columns:
+        out_df["processed_opinion"] = out_df["opinion_word"]
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     out_df.to_excel(output_path, index=False)
     print(f"Extracted {len(out_df)} aspect-opinion pairs.")
     
     return out_df
-
-# =====================================================
-# TEST BLOCK (Hanya jalan jika file dijalankan langsung)
-# =====================================================
-if __name__ == "__main__":
-    test_text = "The gameplay feels smooth and addictive, but the graphics look outdated and blurry on my PC. I really enjoy the music because it creates a great atmosphere, although the story is quite boring."
-    print("Testing extraction...")
-    res = extract_aspect_opinion(test_text)
-    for r in res:
-        print(r)

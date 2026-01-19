@@ -56,6 +56,52 @@ step03 = load_module(os.path.join(PRE_DIR, "3_post_absa_preprocessing.py"), "ste
 step04 = load_module(os.path.join(PRE_DIR, "auto_lebel.py"), "step04")
 step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "step05")
 
+
+# =====================================================
+# FITUR TAMBAHAN: AI INSIGHT GENERATOR (LOGIC BASED)
+# =====================================================
+def generate_smart_insight(df, accuracy):
+    """
+    Fungsi ini bertindak seperti 'Copilot' sederhana yang membaca data
+    dan mengubahnya menjadi narasi kesimpulan yang mudah dibaca manusia.
+    """
+    if df.empty:
+        return "Belum cukup data untuk menyimpulkan."
+
+    # 1. Hitung Statistik Global
+    total = len(df)
+    pos = (df['label_text'] == 'positive').sum()
+    neg = (df['label_text'] == 'negative').sum()
+    
+    dominance = "Positif" if pos >= neg else "Negatif"
+    percent_dom = (max(pos, neg) / total) * 100
+
+    # 2. Cari Aspek Paling Bermasalah (Paling banyak Negative)
+    aspect_stats = df.groupby('aspect')['label_text'].value_counts().unstack(fill_value=0)
+    
+    # Pastikan kolom ada
+    if 'negative' not in aspect_stats.columns: aspect_stats['negative'] = 0
+    if 'positive' not in aspect_stats.columns: aspect_stats['positive'] = 0
+
+    # Cari aspek dengan jumlah negatif terbanyak
+    worst_aspect = aspect_stats['negative'].idxmax() if not aspect_stats.empty else "N/A"
+    worst_count = aspect_stats.loc[worst_aspect, 'negative'] if not aspect_stats.empty else 0
+    
+    # Cari aspek dengan jumlah positif terbanyak
+    best_aspect = aspect_stats['positive'].idxmax() if not aspect_stats.empty else "N/A"
+    best_count = aspect_stats.loc[best_aspect, 'positive'] if not aspect_stats.empty else 0
+
+    # 3. Rangkai Kalimat (Prompt Engineering versi Python String)
+    insight = f"""
+    ### 🤖 AI Copilot Summary
+    Berdasarkan analisis terhadap **{total} ulasan**, berikut adalah kesimpulan otomatis:
+    
+    1.  **Sentimen Dominan:** Mayoritas pengguna memberikan respon **{dominance}** ({percent_dom:.1f}%).
+    2.  **Kekuatan Utama:** Aspek **{best_aspect.upper()}** paling banyak dipuji (mendapat {best_count} respon positif). Ini adalah fitur unggulan game ini.
+    3.  **Kelemahan Kritis:** Pengguna paling banyak mengeluh soal **{worst_aspect.upper()}** (mendapat {worst_count} keluhan). Developer disarankan untuk segera memperbaiki sektor ini.
+    4.  **Kualitas Model:** Analisis ini didukung oleh model AI dengan tingkat akurasi **{accuracy:.1f}%**, sehingga hasil prediksi cukup dapat dipercaya.
+    """
+    return insight
 # =====================================================
 # UI HEADER & SIDEBAR
 # =====================================================
@@ -180,7 +226,13 @@ if start_process:
         pos = (df_final["label_text"] == "positive").sum()
         neg = (df_final["label_text"] == "negative").sum()
         total = len(df_final)
+        # --- UPDATE DISINI: TAMPILKAN AI INSIGHT ---
+        # Panggil fungsi "Copilot" kita
+        ai_summary = generate_smart_insight(df_final, result['accuracy']*100)
         
+        # Tampilkan dalam kotak pesan yang cantik
+        st.info(ai_summary) 
+        # -------------------------------------------
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Data", total)
         col2.metric("Positive", pos, delta="Good", delta_color="normal")
@@ -267,3 +319,4 @@ if start_process:
 
 elif not start_process and uploaded_file is None and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+

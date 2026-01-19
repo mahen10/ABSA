@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (BUG FIXED)
+# Streamlit App – ABSA Steam Review (ROBUST & USER FRIENDLY)
 # =====================================================
 
 import streamlit as st
@@ -62,14 +62,13 @@ step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "s
 st.title("🎮 Steam Review Analysis")
 st.markdown("---")
 
-# Variabel flag global (inisialisasi awal)
+# Variabel flag global
 start_process = False
-uploaded_file = None  # <--- PERBAIKAN 1: Inisialisasi variabel agar tidak NameError
+uploaded_file = None 
 
 with st.sidebar:
     st.header("⚙️ Konfigurasi")
     
-    # PILIHAN MODE: UPLOAD atau MANUAL
     input_mode = st.radio("Pilih Sumber Data:", ["📂 Upload Excel", "✍️ Input Teks Manual"])
     
     st.markdown("---")
@@ -85,19 +84,26 @@ with st.sidebar:
                 start_process = True
 
     elif input_mode == "✍️ Input Teks Manual":
-        st.info("Ketik ulasan game di bawah ini untuk dianalisis langsung.")
-        # Text Area untuk input manual
-        user_text = st.text_area("Masukkan Review Game:", height=150, placeholder="Contoh: Game ini grafiknya bagus banget, tapi harganya terlalu mahal.")
+        st.info("Ketik ulasan game di bawah ini.")
+        
+        # --- FITUR BARU: PANDUAN KATA KUNCI ---
+        with st.expander("ℹ️ Tips: Gunakan kata kunci ini agar terdeteksi!"):
+            st.markdown("""
+            **Sistem mencari kata-kata ini:**
+            * 🎨 **Graphics:** graphics, visual, art, texture, animation, lighting...
+            * ⚔️ **Gameplay:** gameplay, combat, mechanics, action, quest, level...
+            * 📜 **Story:** story, plot, narrative, ending, character, dialogue...
+            * 🚀 **Performance:** fps, lag, crash, bug, optimization, freeze...
+            * 🎵 **Music:** music, sound, audio, soundtrack, voice, sfx...
+            """)
+            
+        user_text = st.text_area("Masukkan Review Game:", height=150, placeholder="Contoh: The graphics are amazing but the gameplay is boring.")
         
         if st.button("🚀 Analisis Teks", key="btn_manual"):
             if user_text.strip():
-                # --- TRIK: MEMBUAT EXCEL PALSU DARI INPUT USER ---
-                # PERBAIKAN 2: Menggunakan nama kolom 'review' sesuai file preprocessing Anda
                 df_manual = pd.DataFrame({"review": [user_text]}) 
-                
                 input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
                 df_manual.to_excel(input_path, index=False)
-                
                 start_process = True
             else:
                 st.warning("Mohon isi teks terlebih dahulu.")
@@ -109,7 +115,6 @@ if start_process:
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # Define output paths
     out1 = os.path.join(OUTPUT_DIR, "02_pre_absa.xlsx")
     out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
     out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
@@ -146,19 +151,22 @@ if start_process:
         # =====================================================
         st.markdown("### 🔍 Deteksi Aspek & Sentimen")
         
-        # Cek hasil ekstraksi
         if os.path.exists(out4):
             df_final = pd.read_excel(out4)
+            
+            # --- PERBAIKAN CRITICAL: CEK APAKAH HASIL KOSONG ---
+            if df_final.empty:
+                st.warning("⚠️ **Tidak ada aspek game yang terdeteksi dari teks Anda.**")
+                st.info("Coba masukkan kalimat yang lebih spesifik, misal: 'The graphics are bad' atau 'Gameplay is fun'.")
+                st.stop() # Hentikan proses agar tidak error grafik
+            
             df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
             
-            # Jika mode manual, tampilkan tabel lebih sederhana
             if input_mode == "✍️ Input Teks Manual":
                 st.info("Berikut adalah hasil pembedahan kalimat Anda:")
-                # Tampilkan kolom penting saja agar user fokus
                 cols_to_show = [col for col in df_final.columns if col in ['aspect', 'processed_opinion', 'label_text', 'sentiment_score']]
                 st.table(df_final[cols_to_show])
             else:
-                # Mode upload file (tampilkan expander seperti biasa)
                 with st.expander("🏷️ Klik untuk melihat Data Final Terlabeli"):
                      st.dataframe(df_final, use_container_width=True)
         
@@ -178,7 +186,6 @@ if start_process:
         col2.metric("Positive", pos, delta="Good", delta_color="normal")
         col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
         
-        # Tombol download
         with open(out4, "rb") as f:
             col4.download_button(
                 "⬇ Download Hasil",
@@ -196,19 +203,24 @@ if start_process:
             st.subheader("📊 Distribusi Sentimen")
             fig1, ax1 = plt.subplots(figsize=(6, 3)) 
             counts = df_final["label_text"].value_counts()
-            colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
             
             if not counts.empty:
+                colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
                 counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
-            
+            else:
+                st.write("Tidak ada data untuk ditampilkan.")
+
             ax1.set_xlabel("Jumlah")
             plt.tight_layout()
             st.pyplot(fig1, use_container_width=False)
 
         with c_right:
             st.subheader("🤖 Evaluasi Model")
-            st.write(f"**Akurasi Dataset (Test Split): {result['accuracy']:.2%}**")
-            st.caption("*Confusion Matrix ini berdasarkan performa model pada data latih/uji.*")
+            # Jika result kosong (dummy), tampilkan pesan
+            if result['accuracy'] == 0 and total < 5:
+                st.info("Model tidak melakukan split test karena data terlalu sedikit (<5). Akurasi ditampilkan sebagai 0% atau dummy.")
+            else:
+                st.write(f"**Akurasi Dataset (Test Split): {result['accuracy']:.2%}**")
             
             cm_df = pd.DataFrame(
                 result["confusion_matrix"], 
@@ -217,38 +229,41 @@ if start_process:
             )
             st.table(cm_df)
         
-        # --- GRAFIK ASPEK ---
+        # --- GRAFIK ASPEK (FIXED ERROR) ---
         st.markdown("---")
         st.subheader("🧩 Analisis Detail Per Aspek")
         
         # Pivot data untuk grafik
         aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
         
-        # Pastikan kolom positive/negative ada
-        if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
-        if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
-        
-        # Plotting
-        fig2, ax2 = plt.subplots(figsize=(10, 4))
-        aspect_sentiment[['positive', 'negative']].plot(
-            kind='bar', 
-            ax=ax2, 
-            color=['#4CAF50', '#F44336'], # Hijau & Merah
-            width=0.7
-        )
-        
-        ax2.set_title("Sentimen per Aspek")
-        ax2.set_ylabel("Jumlah")
-        ax2.set_xlabel("Aspek")
-        ax2.legend(["Positive", "Negative"])
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        st.pyplot(fig2)
+        # Cek apakah hasil pivot kosong
+        if not aspect_sentiment.empty:
+            # Pastikan kolom positive/negative ada
+            if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
+            if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
+            
+            # Plotting
+            fig2, ax2 = plt.subplots(figsize=(10, 4))
+            aspect_sentiment[['positive', 'negative']].plot(
+                kind='bar', 
+                ax=ax2, 
+                color=['#4CAF50', '#F44336'], 
+                width=0.7
+            )
+            
+            ax2.set_title("Sentimen per Aspek")
+            ax2.set_ylabel("Jumlah")
+            ax2.set_xlabel("Aspek")
+            ax2.legend(["Positive", "Negative"])
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            st.pyplot(fig2)
+        else:
+            st.info("Belum cukup data untuk menampilkan grafik per aspek.")
 
     except Exception:
         st.error("❌ Terjadi error sistem")
         st.code(traceback.format_exc())
 
-# PERBAIKAN 3: Logika pengecekan yang aman
 elif not start_process and uploaded_file is None and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")

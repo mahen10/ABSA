@@ -39,34 +39,35 @@ ensure_nltk()
 STOPWORDS = set(stopwords.words("english"))
 
 ASPECT_KEYWORDS = {
-   'graphics': [
-        'graphics', 'graphic', 'visual', 'visuals', 'ui', 'design', 'grafis',
-        'art', 'artstyle', 'look', 'resolution', 'texture', 'animation'
+     "graphics": [
+        "graphics", "graphic", "visual", "visuals", "ui", "gui",
+        "art", "artstyle", "resolution", "texture", "animation", 
+        "lighting", "shadow", "design", "scenery", "environment"
     ],
-    'gameplay': [
-        'gameplay', 'control', 'controls', 'mechanic', 'mechanics',
-        'combat', 'movement', 'interact', 'jump', 'shoot', 'run',
-        'action', 'fun', 'challenging', 'responsive',
-        'attack', 'defend', 'transaction', 'transactions',
-        'quest', 'quests'
+
+    "gameplay": [
+        "gameplay", "control", "controls", "mechanic", "mechanics",
+        "combat", "movement", "system", "feature", "features",
+        "action", "battle", "attack", "defend", "quest", "quests",
+        "level", "enemy", "boss", "difficulty"
     ],
-    'story': [
-        'story', 'plot', 'narrative', 'lore', 'writing', 'dialogue',
-        'ending', 'cutscene', 'quest', 'mission', 'twist',
-        'character', 'development', 'script', 'storyline'
+
+    "story": [
+        "story", "plot", "narrative", "lore", "writing", "dialogue",
+        "ending", "cutscene", "mission", "twist", "script",
+        "character", "development", "storyline", "arc", "pacing"
     ],
-    'performance': [
-        'performance', 'lag', 'bug', 'fps', 'crash', 'glitch',
-        'smooth', 'loading', 'freeze', 'stutter', 'frame',
-        'drop', 'optimization', 'hang', 'delay', 'disconnect',
-        'rate', 'memory', 'usage', 'rendering',
-        'script', 'execution', 'garbage', 'collection'
+
+    "performance": [
+        "performance", "fps", "frame", "rate", "optimization", 
+        "memory", "rendering", "loading", "server", "connection",
+        "ping", "latency", "bug", "glitch", "crash", "freeze" 
     ],
-    'music': [
-        'music', 'sound', 'audio', 'sfx', 'voice', 'soundtrack',
-        'background', 'ost', 'noise', 'volume', 'acting',
-        'ambience', 'effect', 'quality', 'melody',
-        'instrumental', 'harmony', 'song'
+
+    "music": [
+        "music", "sound", "audio", "sfx", "voice", "acting",
+        "soundtrack", "ost", "bgm", "volume", "melody", "song",
+        "noise", "dubbing"
     ]
 }
 

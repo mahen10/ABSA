@@ -1,7 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (ULTIMATE COMPLETE VERSION)
-# Fitur: Upload, Manual, Scraping (+Game Name), AI Insight
+# Streamlit App – ABSA Steam Review (FIXED & COMPLETE)
 # =====================================================
 
 import streamlit as st
@@ -51,29 +50,21 @@ def load_module(path, name):
 # =====================================================
 # LOAD MODULES
 # =====================================================
-# Load Scraper (Step 0) - Pastikan file ini sudah ada fungsi get_game_name
 step00 = load_module(os.path.join(PRE_DIR, "0_steam_scraper.py"), "step00")
-
-# Load Pipeline Steps (1-5)
 step01 = load_module(os.path.join(PRE_DIR, "1_preprocessing_pra_absa.py"), "step01")
 step02 = load_module(os.path.join(PRE_DIR, "2_absa_extraction.py"), "step02")
 step03 = load_module(os.path.join(PRE_DIR, "3_post_absa_preprocessing.py"), "step03")
 step04 = load_module(os.path.join(PRE_DIR, "auto_lebel.py"), "step04")
 step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "step05")
 
-
 # =====================================================
-# FITUR: AI INSIGHT GENERATOR (LOGIC BASED)
+# FITUR: AI INSIGHT GENERATOR
 # =====================================================
 def generate_smart_insight(df, accuracy, game_name=None):
-    """
-    Fungsi 'Copilot' sederhana.
-    Sekarang menerima parameter 'game_name' untuk narasi yang lebih spesifik.
-    """
     if df.empty:
         return "Belum cukup data untuk menyimpulkan."
 
-    # Custom Intro berdasarkan Nama Game
+    # Intro Custom
     intro = f"Berdasarkan analisis ulasan untuk **{game_name}**," if game_name else "Berdasarkan analisis ulasan,"
 
     # 1. Hitung Statistik Global
@@ -87,15 +78,12 @@ def generate_smart_insight(df, accuracy, game_name=None):
     # 2. Cari Aspek Paling Bermasalah & Terbaik
     aspect_stats = df.groupby('aspect')['label_text'].value_counts().unstack(fill_value=0)
     
-    # Pastikan kolom ada
     if 'negative' not in aspect_stats.columns: aspect_stats['negative'] = 0
     if 'positive' not in aspect_stats.columns: aspect_stats['positive'] = 0
 
-    # Cari aspek dengan jumlah negatif terbanyak
     worst_aspect = aspect_stats['negative'].idxmax() if not aspect_stats.empty else "N/A"
     worst_count = aspect_stats.loc[worst_aspect, 'negative'] if not aspect_stats.empty else 0
     
-    # Cari aspek dengan jumlah positif terbanyak
     best_aspect = aspect_stats['positive'].idxmax() if not aspect_stats.empty else "N/A"
     best_count = aspect_stats.loc[best_aspect, 'positive'] if not aspect_stats.empty else 0
 
@@ -116,12 +104,13 @@ def generate_smart_insight(df, accuracy, game_name=None):
 # =====================================================
 st.title("🎮 Steam Review Analysis")
 
-# --- LOGIC NAMA GAME (YANG HILANG TADI) ---
-# Inisialisasi Session State
+# --- STATE MANAGEMENT (PENTING AGAR TIDAK ERROR SAAT RERUN) ---
 if 'game_title' not in st.session_state:
     st.session_state['game_title'] = None
+if 'do_analysis' not in st.session_state:
+    st.session_state['do_analysis'] = False
 
-# Jika ada nama game di memori, tampilkan
+# Tampilkan Nama Game jika ada di memori
 if st.session_state['game_title']:
     st.markdown(f"### 🎯 Target Analisis: **{st.session_state['game_title']}**")
 
@@ -130,14 +119,11 @@ st.markdown("---")
 # =====================================================
 # SIDEBAR
 # =====================================================
-# Variabel flag global
-start_process = False
 uploaded_file = None 
 
 with st.sidebar:
     st.header("⚙️ Konfigurasi")
     
-    # 3 Opsi Input
     input_mode = st.radio("Pilih Sumber Data:", 
                           ["📂 Upload Excel", "✍️ Input Teks Manual", "🕷️ Scraping Steam ID"])
     
@@ -145,77 +131,73 @@ with st.sidebar:
     
     # --- MODE 1: UPLOAD EXCEL ---
     if input_mode == "📂 Upload Excel":
-        st.session_state['game_title'] = None # Reset judul
         uploaded_file = st.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"])
         if uploaded_file:
-            input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
-            with open(input_path, "wb") as f:
+            with open(os.path.join(OUTPUT_DIR, "01_raw.xlsx"), "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success("File Terupload!")
             if st.button("🚀 Jalankan Analisis", key="btn_upload"):
-                start_process = True
+                st.session_state['game_title'] = None # Reset judul
+                st.session_state['do_analysis'] = True # Trigger analisis
 
     # --- MODE 2: INPUT MANUAL ---
     elif input_mode == "✍️ Input Teks Manual":
-        st.session_state['game_title'] = None # Reset judul
         st.info("Ketik ulasan game di bawah ini.")
-        
         with st.expander("ℹ️ Tips: Gunakan kata kunci ini!"):
             st.markdown("""
-            * 🎨 **Graphics:** graphics, visual, art, texture...
-            * ⚔️ **Gameplay:** gameplay, combat, mechanics, action...
-            * 📜 **Story:** story, plot, narrative, ending...
-            * 🚀 **Performance:** fps, lag, crash, bug, optimization...
-            * 🎵 **Music:** music, sound, audio, soundtrack...
+            * 🎨 **Graphics:** graphics, visual, art...
+            * ⚔️ **Gameplay:** gameplay, combat, mechanics...
+            * 📜 **Story:** story, plot, narrative...
+            * 🚀 **Performance:** fps, lag, crash...
+            * 🎵 **Music:** music, sound, audio...
             """)
-            
-        user_text = st.text_area("Masukkan Review Game:", height=150, placeholder="Contoh: The graphics are amazing but the gameplay is boring.")
+        user_text = st.text_area("Masukkan Review Game:", height=150)
         
         if st.button("🚀 Analisis Teks", key="btn_manual"):
             if user_text.strip():
                 df_manual = pd.DataFrame({"review": [user_text]}) 
                 input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
                 df_manual.to_excel(input_path, index=False)
-                start_process = True
+                st.session_state['game_title'] = None
+                st.session_state['do_analysis'] = True # Trigger analisis
             else:
                 st.warning("Mohon isi teks terlebih dahulu.")
 
     # --- MODE 3: SCRAPING STEAM ---
     elif input_mode == "🕷️ Scraping Steam ID":
         st.info("Masukkan App ID dari URL Steam Store.")
-        st.caption("Contoh: 1091500 (Cyberpunk 2077)")
-        
         app_id = st.text_input("Steam App ID:", value="1091500")
         limit = st.slider("Jumlah Ulasan diambil:", 10, 500, 50)
         
         if st.button("🕷️ Mulai Scraping & Analisis", key="btn_scrape"):
             if app_id.isdigit():
-                # 1. AMBIL NAMA GAME DULU (PENTING)
-                with st.spinner("🔍 Mencari informasi game..."):
-                    # Pastikan 0_steam_scraper.py punya fungsi get_game_name
+                # 1. Ambil Nama Game (Cek apakah fungsi ada, kalau tidak skip)
+                with st.spinner("Mencari info game..."):
                     try:
                         game_name = step00.get_game_name(app_id)
-                        st.session_state['game_title'] = game_name # Simpan ke memori
+                        st.session_state['game_title'] = game_name
                     except AttributeError:
                         st.session_state['game_title'] = f"Game ID {app_id}"
 
-                # 2. PROSES SCRAPING
+                # 2. Scraping Data
                 df_scraped = step00.scrape_steam_reviews(app_id, limit=limit)
                 
                 if not df_scraped.empty:
                     st.success(f"Berhasil mengambil {len(df_scraped)} ulasan!")
                     df_scraped.to_excel(os.path.join(OUTPUT_DIR, "01_raw.xlsx"), index=False)
-                    start_process = True
-                    st.rerun() # Refresh halaman biar Judul Game muncul di atas
+                    
+                    # 3. SET STATE & RERUN (KUNCI AGAR TIDAK BERHENTI)
+                    st.session_state['do_analysis'] = True 
+                    st.rerun() 
                 else:
                     st.error("Gagal mengambil data atau tidak ada ulasan relevan.")
             else:
                 st.warning("App ID harus berupa angka.")
 
 # =====================================================
-# MAIN PROCESS LOGIC
+# MAIN PROCESS LOGIC (JALAN JIKA STATE TRUE)
 # =====================================================
-if start_process:
+if st.session_state['do_analysis']:
     progress_bar = st.progress(0)
     status_text = st.empty()
 
@@ -224,10 +206,15 @@ if start_process:
     out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
     out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
     out4 = os.path.join(OUTPUT_DIR, "05_labeled.xlsx")
-    input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx") # Path file input
+    input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx") 
 
     try:
-        # --- PIPELINE START ---
+        # Check input file
+        if not os.path.exists(input_path):
+            st.error("File input hilang. Silakan ulangi proses.")
+            st.session_state['do_analysis'] = False
+            st.stop()
+
         status_text.write("⏳ Step 1/5: Preprocessing...")
         progress_bar.progress(10)
         step01.run(input_path, out1)
@@ -250,7 +237,6 @@ if start_process:
 
         progress_bar.progress(100)
         status_text.success("✅ Analisis Selesai!")
-        # --- PIPELINE END ---
 
         # =====================================================
         # BAGIAN: PREVIEW TABEL DATA
@@ -260,23 +246,17 @@ if start_process:
         if os.path.exists(out4):
             df_final = pd.read_excel(out4)
             
-            # --- CEK APAKAH HASIL KOSONG (Robustness) ---
+            # --- CEK APAKAH HASIL KOSONG ---
             if df_final.empty:
                 st.warning("⚠️ **Tidak ada aspek game yang terdeteksi.**")
-                if input_mode == "✍️ Input Teks Manual":
-                    st.info("Tips: Gunakan kata spesifik. Contoh: 'The **graphics** are bad', 'I love the **gameplay**'.")
-                st.stop() # Hentikan proses agar grafik tidak error
+                st.session_state['do_analysis'] = False # Reset state
+                st.stop()
             
             df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
             
             # Tampilan Tabel
-            if input_mode == "✍️ Input Teks Manual":
-                st.info("Berikut adalah hasil pembedahan kalimat Anda:")
-                cols_to_show = [col for col in df_final.columns if col in ['aspect', 'processed_opinion', 'label_text', 'sentiment_score']]
-                st.table(df_final[cols_to_show])
-            else:
-                with st.expander("🏷️ Klik untuk melihat Data Final Terlabeli"):
-                     st.dataframe(df_final, use_container_width=True)
+            with st.expander("📄 Lihat Data Hasil Analisis"):
+                st.dataframe(df_final, use_container_width=True)
         
         st.markdown("---")
 
@@ -285,22 +265,21 @@ if start_process:
         # =====================================================
         st.subheader("📌 Ringkasan Hasil")
         
+        # --- FITUR AI COPILOT ---
+        game_title = st.session_state.get('game_title', None)
+        acc_score = result.get('accuracy', 0) * 100
+        ai_summary = generate_smart_insight(df_final, acc_score, game_title)
+        st.info(ai_summary)
+        
         pos = (df_final["label_text"] == "positive").sum()
         neg = (df_final["label_text"] == "negative").sum()
         total = len(df_final)
         
-        # --- FITUR AI COPILOT (DENGAN NAMA GAME) ---
-        game_title = st.session_state.get('game_title', None)
-        ai_summary = generate_smart_insight(df_final, result.get('accuracy', 0)*100, game_title)
-        st.info(ai_summary) 
-        
-        # Metrics
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Data", total)
         col2.metric("Positive", pos, delta="Good", delta_color="normal")
         col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
 
-        # Tombol Download
         with open(out4, "rb") as f:
             col4.download_button(
                 "⬇ Download Hasil",
@@ -329,11 +308,10 @@ if start_process:
 
         with c_right:
             st.subheader("🤖 Evaluasi Model")
-            # Jika result kosong (dummy), tampilkan pesan
-            if result['accuracy'] == 0 and total < 5:
-                st.info("Akurasi: 0% (Data terlalu sedikit untuk split test).")
-            else:
-                st.write(f"**Akurasi Dataset (Test Split): {result['accuracy']:.2%}**")
+            if acc_score == 0: 
+                st.info("Data < 5 (Akurasi N/A)")
+            else: 
+                st.write(f"**Akurasi Dataset (Test Split): {acc_score:.2f}%**")
             
             cm_df = pd.DataFrame(
                 result["confusion_matrix"], 
@@ -366,6 +344,11 @@ if start_process:
     except Exception:
         st.error("❌ Terjadi error sistem")
         st.code(traceback.format_exc())
+        
+    # Tombol Reset
+    if st.button("🔄 Reset / Analisis Baru"):
+        st.session_state['do_analysis'] = False
+        st.rerun()
 
-elif not start_process and uploaded_file is None and input_mode == "📂 Upload Excel":
+elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")

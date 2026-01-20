@@ -1,4 +1,3 @@
-ini ke 2
 # =====================================================
 # FILE: Preprocessing/auto_lebel.py
 # Deskripsi: Auto Label Sentimen (VADER Priority -> UMIGON Fallback)

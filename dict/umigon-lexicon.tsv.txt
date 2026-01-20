@@ -926,7 +926,7 @@ mad	negative	!isImmediatelyPrecededByANegation+++!isFollowedBySpecificTerm///max
 maddening	negative	+++!isFollowedByAPositiveOpinion	12:10
 made up	negative	IsPrecededByStrongWord	12:10
 make sense	negative	isImmediatelyPrecededByANegation	12:11
-mediocre	negative	isImmediatelyPrecededByANegation	12:11
+mediocre	positive	isImmediatelyPrecededByANegation	12:11
 mess	negative	!isImmediatelyPrecededByANegation+++!isPrecededBySpecificTerm///go to the|went to the|watched the|watch the|attend the|attended the	if (A && B) {12} else {10}
 mess up	negative	!isImmediatelyPrecededByANegation	12:10
 messed	negative	!isImmediatelyPrecededByANegation	12:10
@@ -1274,7 +1274,7 @@ why the hell	negative		12
 whore	negative		12
 whores	negative		12
 wish i	negative	isImmediatelyFollowedBySpecificTerm///had|hadn|did|didn|would|wouldn	12:10
-wish	negative	isImmediatelyFollowedBySpecificTerm///he|they|she|we|people	12:10
+wish	positive	isImmediatelyFollowedBySpecificTerm///he|they|she|we|people	12:10
 be buying	negative		12
 won t be buying	negative		12
 won t buy	negative		12

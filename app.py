@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (FIXED & COMPLETE)
+# Streamlit App – ABSA Steam Review (FINAL UI FIX)
 # =====================================================
 
 import streamlit as st
@@ -50,7 +50,10 @@ def load_module(path, name):
 # =====================================================
 # LOAD MODULES
 # =====================================================
+# Load Scraper (Step 0)
 step00 = load_module(os.path.join(PRE_DIR, "0_steam_scraper.py"), "step00")
+
+# Load Pipeline Steps (1-5)
 step01 = load_module(os.path.join(PRE_DIR, "1_preprocessing_pra_absa.py"), "step01")
 step02 = load_module(os.path.join(PRE_DIR, "2_absa_extraction.py"), "step02")
 step03 = load_module(os.path.join(PRE_DIR, "3_post_absa_preprocessing.py"), "step03")
@@ -104,7 +107,7 @@ def generate_smart_insight(df, accuracy, game_name=None):
 # =====================================================
 st.title("🎮 Steam Review Analysis")
 
-# --- STATE MANAGEMENT (PENTING AGAR TIDAK ERROR SAAT RERUN) ---
+# --- STATE MANAGEMENT ---
 if 'game_title' not in st.session_state:
     st.session_state['game_title'] = None
 if 'do_analysis' not in st.session_state:
@@ -137,8 +140,8 @@ with st.sidebar:
                 f.write(uploaded_file.getbuffer())
             st.success("File Terupload!")
             if st.button("🚀 Jalankan Analisis", key="btn_upload"):
-                st.session_state['game_title'] = None # Reset judul
-                st.session_state['do_analysis'] = True # Trigger analisis
+                st.session_state['game_title'] = None
+                st.session_state['do_analysis'] = True
 
     # --- MODE 2: INPUT MANUAL ---
     elif input_mode == "✍️ Input Teks Manual":
@@ -159,19 +162,18 @@ with st.sidebar:
                 input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
                 df_manual.to_excel(input_path, index=False)
                 st.session_state['game_title'] = None
-                st.session_state['do_analysis'] = True # Trigger analisis
+                st.session_state['do_analysis'] = True
             else:
                 st.warning("Mohon isi teks terlebih dahulu.")
 
     # --- MODE 3: SCRAPING STEAM ---
     elif input_mode == "🕷️ Scraping Steam ID":
         st.info("Masukkan App ID dari URL Steam Store.")
-        app_id = st.text_input("Steam App ID:", value="")
-        limit = st.slider("Jumlah Ulasan diambil:", 10, 2000, 50)
+        app_id = st.text_input("Steam App ID:", value="1091500")
+        limit = st.slider("Jumlah Ulasan diambil:", 10, 500, 50)
         
         if st.button("🕷️ Mulai Scraping & Analisis", key="btn_scrape"):
             if app_id.isdigit():
-                # 1. Ambil Nama Game (Cek apakah fungsi ada, kalau tidak skip)
                 with st.spinner("Mencari info game..."):
                     try:
                         game_name = step00.get_game_name(app_id)
@@ -179,14 +181,12 @@ with st.sidebar:
                     except AttributeError:
                         st.session_state['game_title'] = f"Game ID {app_id}"
 
-                # 2. Scraping Data
                 df_scraped = step00.scrape_steam_reviews(app_id, limit=limit)
                 
                 if not df_scraped.empty:
                     st.success(f"Berhasil mengambil {len(df_scraped)} ulasan!")
                     df_scraped.to_excel(os.path.join(OUTPUT_DIR, "01_raw.xlsx"), index=False)
                     
-                    # 3. SET STATE & RERUN (KUNCI AGAR TIDAK BERHENTI)
                     st.session_state['do_analysis'] = True 
                     st.rerun() 
                 else:
@@ -201,7 +201,6 @@ if st.session_state['do_analysis']:
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # Definisi Path
     out1 = os.path.join(OUTPUT_DIR, "02_pre_absa.xlsx")
     out2 = os.path.join(OUTPUT_DIR, "03_absa.xlsx")
     out3 = os.path.join(OUTPUT_DIR, "04_post_absa.xlsx")
@@ -209,39 +208,33 @@ if st.session_state['do_analysis']:
     input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx") 
 
     try:
-        # Check input file
         if not os.path.exists(input_path):
             st.error("File input hilang. Silakan ulangi proses.")
             st.session_state['do_analysis'] = False
             st.stop()
 
         status_text.write("⏳ Step 1/5: Preprocessing...")
-        progress_bar.progress(10)
-        step01.run(input_path, out1)
-
+        progress_bar.progress(10); step01.run(input_path, out1)
+        
         status_text.write("⏳ Step 2/5: Ekstraksi Aspek (ABSA)...")
-        progress_bar.progress(30)
-        step02.run(out1, out2)
-
+        progress_bar.progress(30); step02.run(out1, out2)
+        
         status_text.write("⏳ Step 3/5: Cleaning Lanjutan...")
-        progress_bar.progress(50)
-        step03.run(out2, out3)
-
+        progress_bar.progress(50); step03.run(out2, out3)
+        
         status_text.write("⏳ Step 4/5: Pelabelan Otomatis...")
-        progress_bar.progress(70)
-        step04.run(out3, out4)
-
+        progress_bar.progress(70); step04.run(out3, out4)
+        
         status_text.write("⏳ Step 5/5: Klasifikasi & Evaluasi Model...")
-        progress_bar.progress(90)
-        result = step05.run(out4, OUTPUT_DIR)
+        progress_bar.progress(90); result = step05.run(out4, OUTPUT_DIR)
 
         progress_bar.progress(100)
         status_text.success("✅ Analisis Selesai!")
 
         # =====================================================
-        # BAGIAN: PREVIEW TABEL DATA
+        # BAGIAN: PREVIEW TABEL DATA (UPDATED)
         # =====================================================
-       st.markdown("### 🔍 Deteksi Aspek & Sentimen")
+        st.markdown("### 🔍 Deteksi Aspek & Sentimen")
         
         if os.path.exists(out4):
             df_final = pd.read_excel(out4)
@@ -270,7 +263,6 @@ if st.session_state['do_analysis']:
         # =====================================================
         st.subheader("📌 Ringkasan Hasil")
         
-        # --- FITUR AI COPILOT ---
         game_title = st.session_state.get('game_title', None)
         acc_score = result.get('accuracy', 0) * 100
         ai_summary = generate_smart_insight(df_final, acc_score, game_title)
@@ -295,7 +287,6 @@ if st.session_state['do_analysis']:
         
         st.markdown("---")
 
-        # --- GRAFIK KIRI & KANAN ---
         c_left, c_right = st.columns([1, 1])
 
         with c_left:
@@ -325,7 +316,6 @@ if st.session_state['do_analysis']:
             )
             st.table(cm_df)
         
-        # --- GRAFIK ASPEK ---
         st.markdown("---")
         st.subheader("🧩 Analisis Detail Per Aspek")
         
@@ -350,13 +340,9 @@ if st.session_state['do_analysis']:
         st.error("❌ Terjadi error sistem")
         st.code(traceback.format_exc())
         
-    # Tombol Reset
     if st.button("🔄 Reset / Analisis Baru"):
         st.session_state['do_analysis'] = False
         st.rerun()
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
-
-
-

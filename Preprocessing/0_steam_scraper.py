@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: Preprocessing/0_steam_scraper.py
-# Deskripsi: Scraper Spesifik dengan Filter Bahasa & Aspek
+# Deskripsi: Scraper Spesifik dengan Filter Bahasa & Aspek + Get Name
 # =====================================================
 import requests
 import time
@@ -68,7 +68,25 @@ def safe_request(url, params, max_retries=3):
     return None
 
 # ============================
-# FUNGSI UTAMA YANG DIPANGGIL APP.PY
+# FUNGSI 1: AMBIL NAMA GAME (WAJIB ADA)
+# ============================
+def get_game_name(appid):
+    """Mengambil nama game berdasarkan App ID dari Steam Store API"""
+    url = "https://store.steampowered.com/api/appdetails"
+    params = {"appids": appid}
+    
+    try:
+        response = safe_request(url, params)
+        if response:
+            data = response.json()
+            if data and str(appid) in data and data[str(appid)]['success']:
+                return data[str(appid)]['data']['name']
+    except Exception:
+        pass
+    return f"Unknown Game (ID: {appid})"
+
+# ============================
+# FUNGSI 2: SCRAPING REVIEW
 # ============================
 def scrape_steam_reviews(appid, limit=100):
     reviews = []
@@ -80,15 +98,13 @@ def scrape_steam_reviews(appid, limit=100):
     status_text = st.empty()
     status_text.write("🔄 Menghubungi Steam...")
 
-    total_fetched = 0
-    
     # Loop sampai target tercapai
     while len(reviews) < limit:
         url = f"https://store.steampowered.com/appreviews/{appid}"
         params = {
             "json": 1,
             "filter": "recent",
-            "language": "english", # Fokus Inggris dulu karena model kita Inggris
+            "language": "english", # Fokus Inggris
             "review_type": "all",
             "purchase_type": "all",
             "num_per_page": count_per_request,
@@ -112,15 +128,13 @@ def scrape_steam_reviews(appid, limit=100):
             if len(review_text.split()) < 3: # Skip review terlalu pendek
                 continue
 
-            # --- FILTER BAHASA & ASPEK (LOGIKA ANDA) ---
+            # --- FILTER BAHASA & ASPEK ---
             try:
-                # Deteksi bahasa (biar aman, fallback ke unknown)
                 lang = detect(review_text)
             except:
                 lang = "unknown"
 
-            # Filter: Hanya ambil jika bahasa EN/ID DAN mengandung keyword aspek
-            # Note: Model sentimen kita bahasa Inggris, jadi prioritas 'en'
+            # Filter: Hanya ambil jika bahasa EN DAN mengandung keyword aspek
             if lang == 'en' and contains_aspect_keywords(review_text):
                 reviews.append({
                     "review": review_text,

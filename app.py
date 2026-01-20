@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: app.py
-# Streamlit App – ABSA Steam Review (FINAL UI FIX)
+# Streamlit App – ABSA Steam Review (AUTO-RESET FIXED)
 # =====================================================
 
 import streamlit as st
@@ -50,18 +50,16 @@ def load_module(path, name):
 # =====================================================
 # LOAD MODULES
 # =====================================================
-# Load Scraper (Step 0)
 step00 = load_module(os.path.join(PRE_DIR, "0_steam_scraper.py"), "step00")
-
-# Load Pipeline Steps (1-5)
 step01 = load_module(os.path.join(PRE_DIR, "1_preprocessing_pra_absa.py"), "step01")
 step02 = load_module(os.path.join(PRE_DIR, "2_absa_extraction.py"), "step02")
 step03 = load_module(os.path.join(PRE_DIR, "3_post_absa_preprocessing.py"), "step03")
 step04 = load_module(os.path.join(PRE_DIR, "auto_lebel.py"), "step04")
 step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "step05")
 
+
 # =====================================================
-# FITUR: AI INSIGHT GENERATOR
+# FITUR: AI INSIGHT GENERATOR (LOGIC BASED)
 # =====================================================
 def generate_smart_insight(df, accuracy, game_name=None):
     if df.empty:
@@ -81,12 +79,15 @@ def generate_smart_insight(df, accuracy, game_name=None):
     # 2. Cari Aspek Paling Bermasalah & Terbaik
     aspect_stats = df.groupby('aspect')['label_text'].value_counts().unstack(fill_value=0)
     
+    # Pastikan kolom ada
     if 'negative' not in aspect_stats.columns: aspect_stats['negative'] = 0
     if 'positive' not in aspect_stats.columns: aspect_stats['positive'] = 0
 
+    # Cari aspek dengan jumlah negatif terbanyak
     worst_aspect = aspect_stats['negative'].idxmax() if not aspect_stats.empty else "N/A"
     worst_count = aspect_stats.loc[worst_aspect, 'negative'] if not aspect_stats.empty else 0
     
+    # Cari aspek dengan jumlah positif terbanyak
     best_aspect = aspect_stats['positive'].idxmax() if not aspect_stats.empty else "N/A"
     best_count = aspect_stats.loc[best_aspect, 'positive'] if not aspect_stats.empty else 0
 
@@ -101,6 +102,15 @@ def generate_smart_insight(df, accuracy, game_name=None):
     4.  **Kualitas Model:** Analisis ini didukung oleh model AI dengan tingkat akurasi **{accuracy:.1f}%**.
     """
     return insight
+
+# =====================================================
+# FUNGSI RESET (SOLUSI MASALAH ANDA)
+# =====================================================
+def reset_state():
+    """Fungsi ini dipanggil otomatis saat user ganti menu"""
+    st.session_state['do_analysis'] = False
+    st.session_state['game_title'] = None
+    # Kita tidak menghapus file output agar tidak error, tapi kita reset trigger-nya
 
 # =====================================================
 # UI HEADER
@@ -127,8 +137,12 @@ uploaded_file = None
 with st.sidebar:
     st.header("⚙️ Konfigurasi")
     
-    input_mode = st.radio("Pilih Sumber Data:", 
-                          ["📂 Upload Excel", "✍️ Input Teks Manual", "🕷️ Scraping Steam ID"])
+    # PERBAIKAN: Tambahkan 'on_change=reset_state'
+    input_mode = st.radio(
+        "Pilih Sumber Data:", 
+        ["📂 Upload Excel", "✍️ Input Teks Manual", "🕷️ Scraping Steam ID"],
+        on_change=reset_state  # <--- INI KUNCINYA AGAR AUTO-REFRESH
+    )
     
     st.markdown("---")
     
@@ -140,7 +154,7 @@ with st.sidebar:
                 f.write(uploaded_file.getbuffer())
             st.success("File Terupload!")
             if st.button("🚀 Jalankan Analisis", key="btn_upload"):
-                st.session_state['game_title'] = None
+                reset_state() # Reset dulu biar bersih
                 st.session_state['do_analysis'] = True
 
     # --- MODE 2: INPUT MANUAL ---
@@ -161,7 +175,8 @@ with st.sidebar:
                 df_manual = pd.DataFrame({"review": [user_text]}) 
                 input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
                 df_manual.to_excel(input_path, index=False)
-                st.session_state['game_title'] = None
+                
+                reset_state() # Reset dulu
                 st.session_state['do_analysis'] = True
             else:
                 st.warning("Mohon isi teks terlebih dahulu.")
@@ -169,11 +184,12 @@ with st.sidebar:
     # --- MODE 3: SCRAPING STEAM ---
     elif input_mode == "🕷️ Scraping Steam ID":
         st.info("Masukkan App ID dari URL Steam Store.")
-        app_id = st.text_input("Steam App ID:", value="")
-        limit = st.slider("Jumlah Ulasan diambil:", 10, 2000, 50)
+        app_id = st.text_input("Steam App ID:", value="1091500")
+        limit = st.slider("Jumlah Ulasan diambil:", 10, 500, 50)
         
         if st.button("🕷️ Mulai Scraping & Analisis", key="btn_scrape"):
             if app_id.isdigit():
+                reset_state() # Reset dulu
                 with st.spinner("Mencari info game..."):
                     try:
                         game_name = step00.get_game_name(app_id)
@@ -232,14 +248,13 @@ if st.session_state['do_analysis']:
         status_text.success("✅ Analisis Selesai!")
 
         # =====================================================
-        # BAGIAN: PREVIEW TABEL DATA (UPDATED)
+        # BAGIAN: PREVIEW TABEL DATA
         # =====================================================
         st.markdown("### 🔍 Deteksi Aspek & Sentimen")
         
         if os.path.exists(out4):
             df_final = pd.read_excel(out4)
             
-            # --- CEK APAKAH HASIL KOSONG ---
             if df_final.empty:
                 st.warning("⚠️ **Tidak ada aspek game yang terdeteksi.**")
                 st.session_state['do_analysis'] = False
@@ -247,13 +262,11 @@ if st.session_state['do_analysis']:
             
             df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
             
-            # --- PERBAIKAN: PILIH KOLOM TERTENTU SAJA ---
+            # --- TAMPILKAN KOLOM PILIHAN ---
             desired_cols = ["original_review", "opinion_context", "aspect", "label_text"]
-            # Pastikan kolom benar-benar ada di data (untuk menghindari error)
             display_cols = [col for col in desired_cols if col in df_final.columns]
             
             with st.expander("📄 Lihat Data Hasil Analisis"):
-                # Tampilkan hanya kolom yang dipilih
                 st.dataframe(df_final[display_cols], use_container_width=True)
         
         st.markdown("---")
@@ -340,10 +353,10 @@ if st.session_state['do_analysis']:
         st.error("❌ Terjadi error sistem")
         st.code(traceback.format_exc())
         
+    # Tombol Reset di bawah
     if st.button("🔄 Reset / Analisis Baru"):
         st.session_state['do_analysis'] = False
         st.rerun()
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
-

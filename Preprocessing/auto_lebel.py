@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: Preprocessing/auto_lebel.py
-# Deskripsi: Auto Label dengan Sistem Scoring & Gaming Dict
+# Deskripsi: Auto Label (Smart Logic: Gaming Dict + Negation Handling)
 # =====================================================
 
 import pandas as pd
@@ -14,36 +14,29 @@ UMIGON_PATH = os.path.join("dict", "umigon-lexicon.tsv.txt")
 VADER_PATH = os.path.join("dict", "vader_lexicon.txt")
 
 # ===============================
-# KAMUS SPESIFIK GAMING (Overrides)
+# 1. KAMUS SPESIFIK GAMING (Wajib untuk Akurasi Tinggi)
 # ===============================
-# Kata-kata ini akan mengalahkan kamus umum (Vader/Umigon)
 GAMING_DICT = {
-    "addictive": "positive",
-    "addicting": "positive",
-    "masterpiece": "positive",
-    "cinema": "positive",
-    "kino": "positive",
-    "refund": "negative",
-    "crash": "negative",
-    "unplayable": "negative",
-    "bug": "negative",
-    "buggy": "negative",
-    "trash": "negative",
-    "garbage": "negative",
-    "solid": "positive",
-    "smooth": "positive",
-    "clunky": "negative",
-    "lag": "negative",
-    "stutter": "negative"
+    # Positif
+    "addictive": "positive", "masterpiece": "positive", "cinema": "positive",
+    "kino": "positive", "solid": "positive", "smooth": "positive",
+    "crisp": "positive", "fun": "positive", "optimized": "positive",
+    "immersive": "positive",
+    
+    # Negatif
+    "refund": "negative", "crash": "negative", "unplayable": "negative",
+    "bug": "negative", "buggy": "negative", "trash": "negative",
+    "garbage": "negative", "clunky": "negative", "lag": "negative",
+    "stutter": "negative", "fps drops": "negative", "boring": "negative",
+    "repetitive": "negative", "broken": "negative", "woke": "negative"
 }
 
 # ===============================
-# LOAD DICTIONARIES
+# 2. LOAD DICTIONARIES
 # ===============================
 def load_vader(path):
     vader = {}
-    if not os.path.exists(path):
-        return vader
+    if not os.path.exists(path): return vader
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             if not line.strip(): continue
@@ -64,75 +57,96 @@ def load_umigon(path):
     except: return {}
 
 # ===============================
-# CORE LOGIC: SENTIMENT SCORING
+# 3. SMART LOGIC: NEGATION CHECK
 # ===============================
-def calculate_sentiment_score(text, umigon, vader):
+def check_negation(word, context_str):
     """
-    Menghitung total skor sentimen dari sebuah teks.
-    Positive menambah skor, Negative mengurangi skor.
+    Mengecek apakah ada kata 'not', 'no', 'never' dsb 
+    dalam jarak 3 kata SEBELUM kata target di dalam konteks.
     """
-    if not isinstance(text, str): return 0.0
+    if pd.isna(context_str) or not context_str:
+        return False
     
-    tokens = re.findall(r"\b\w+\b", text.lower())
-    score = 0.0
+    context_str = str(context_str).lower()
+    word = str(word).lower()
     
-    # Modifier sederhana (bisa dikembangkan)
-    negation = False
+    # Cari posisi kata di konteks
+    # Kita pakai regex boundary \b agar akurat
+    matches = list(re.finditer(r'\b' + re.escape(word) + r'\b', context_str))
     
-    for word in tokens:
-        # Reset negation jika ada tanda baca (simple check)
+    if not matches:
+        return False
         
-        # 1. Cek Gaming Dict (Prioritas Tertinggi)
-        if word in GAMING_DICT:
-            val = 1.5 if GAMING_DICT[word] == 'positive' else -1.5
-            score += val
-            continue
+    # Ambil match pertama saja untuk simplifikasi
+    start_index = matches[0].start()
+    
+    # Ambil teks sebelum kata tersebut (max 20 karakter mundur)
+    preceding_text = context_str[max(0, start_index - 25) : start_index]
+    
+    # Kata-kata negasi
+    negations = ["not", "no", "never", "n't", "hardly", "barely", "lack"]
+    
+    # Cek apakah ada negasi di teks sebelumnya
+    tokens = re.split(r'\s+', preceding_text.strip())
+    # Ambil 3 kata terakhir sebelum target
+    last_3_tokens = tokens[-3:] 
+    
+    for t in last_3_tokens:
+        if any(neg in t for neg in negations):
+            return True
             
-        # 2. Cek Vader (Skor detail)
-        if word in vader:
-            score += vader[word]
-            continue
-            
-        # 3. Cek Umigon (Skor biner)
-        if word in umigon:
-            val = 1.0 if umigon[word] == 'positive' else -1.0
-            score += val
-            
-    return score
+    return False
+
+def flip_sentiment(label):
+    if label == "positive": return "negative"
+    if label == "negative": return "positive"
+    return label
 
 # ===============================
 # FINAL LABEL FUNCTION
 # ===============================
 def label_sentiment(opinion_word, opinion_context, umigon, vader):
-    # Bersihkan input
-    op_word = str(opinion_word).lower() if pd.notna(opinion_word) else ""
-    op_context = str(opinion_context).lower() if pd.notna(opinion_context) else ""
-
-    # --- LANGKAH 1: Cek Kata Opini (Sangat Spesifik) ---
-    # Jika kata opini ada di Gaming Dict, langsung ambil keputusannya
-    if op_word in GAMING_DICT:
-        return GAMING_DICT[op_word]
-
-    # --- LANGKAH 2: Hitung Skor Konteks (Voting) ---
-    # Kita gabungkan kata opini dan konteks untuk mendapatkan gambaran utuh
-    # Memberi bobot lebih pada opinion_word (dikalikan 2)
-    full_text = f"{op_word} {op_word} {op_context}" 
+    op_word = str(opinion_word).lower().strip() if pd.notna(opinion_word) else ""
+    # Pecah jika ada koma (misal "smooth, fun")
+    words = [w.strip() for w in re.split(r'[,\s]+', op_word) if w.strip()]
     
-    total_score = calculate_sentiment_score(full_text, umigon, vader)
+    final_label = None
     
-    # --- LANGKAH 3: Tentukan Label berdasarkan Skor ---
-    # Threshold 0.05 untuk menghindari noise
-    if total_score >= 0.05:
-        return "positive"
-    elif total_score <= -0.05:
-        return "negative"
-    
-    # --- FALLBACK: Jika skor 0 (Netral/Tidak Tau) ---
-    # Cek Umigon direct match pada kata opini sebagai upaya terakhir
-    if op_word in umigon:
-        return umigon[op_word]
+    # --- LOGIC LOOP ---
+    for w in words:
+        current_label = None
         
-    return "positive" # Default bias ke positif jika bingung
+        # 1. Cek Gaming Dict (Priority 1)
+        if w in GAMING_DICT:
+            current_label = GAMING_DICT[w]
+            
+        # 2. Cek Umigon (Priority 2)
+        elif w in umigon:
+            current_label = umigon[w]
+            
+        # 3. Cek Vader (Priority 3)
+        elif w in vader:
+            score = vader[w]
+            if score >= 0.05: current_label = "positive"
+            elif score <= -0.05: current_label = "negative"
+            
+        # --- JIKA KETEMU LABEL, CEK NEGASI ---
+        if current_label:
+            # Cek apakah ada kata "not" sebelumnya di konteks
+            is_negated = check_negation(w, opinion_context)
+            if is_negated:
+                current_label = flip_sentiment(current_label)
+            
+            return current_label # Langsung return (First Match Logic)
+
+    # --- FALLBACK: CONTEXT SCAN ---
+    # Jika opinion_word tidak ketemu di kamus manapun, scan konteksnya
+    if pd.notna(opinion_context):
+        ctx_tokens = re.findall(r"\b\w+\b", str(opinion_context).lower())
+        for t in ctx_tokens:
+            if t in GAMING_DICT: return GAMING_DICT[t] # Cek gaming dict di konteks
+            
+    return "positive" # Bias default
 
 # ===============================
 # PIPELINE ENTRY POINT
@@ -157,9 +171,6 @@ def run(input_path: str, output_path: str):
     
     if target_col not in df.columns and "processed_opinion" in df.columns:
         target_col = "processed_opinion" # Fallback
-
-    if context_col not in df.columns:
-        df[context_col] = "" # Kosongkan jika tidak ada
 
     # Proses
     df["label_text"] = df.apply(

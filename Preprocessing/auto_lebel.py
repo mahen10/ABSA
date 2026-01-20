@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: Preprocessing/auto_lebel.py
-# Deskripsi: Auto Label Sentimen (UMIGON + VADER)
+# Deskripsi: Auto Label Sentimen (VADER Priority -> UMIGON Fallback)
 # =====================================================
 
 import pandas as pd
@@ -10,7 +10,6 @@ import os
 # ===============================
 # PATH DEFAULT
 # ===============================
-# Pastikan path ini sesuai dengan struktur folder Anda
 UMIGON_PATH = os.path.join("dict", "umigon-lexicon.tsv.txt")
 VADER_PATH = os.path.join("dict", "vader_lexicon.txt")
 
@@ -68,15 +67,16 @@ def load_umigon(path):
 # HELPER: NORMALIZE VADER SCORE
 # ===============================
 def normalize_vader(score):
+    """Mengubah skor angka VADER menjadi label"""
     if score >= 0.05:
         return "positive"
     elif score <= -0.05:
         return "negative"
     else:
-        return None
+        return None # Neutral dianggap tidak ketemu agar bisa lanjut ke lexicon lain
 
 # ===============================
-# CONTEXT FALLBACK
+# CONTEXT FALLBACK (Logic VADER First)
 # ===============================
 def context_fallback(text, umigon, vader):
     if not isinstance(text, str):
@@ -84,51 +84,55 @@ def context_fallback(text, umigon, vader):
         
     tokens = re.findall(r"\b\w+\b", str(text).lower())
 
-    # 1. Cek UMIGON di context (Prioritas Utama)
+    # 1. Cek VADER di context (Prioritas Utama)
+    for t in tokens:
+        if t in vader:
+            res = normalize_vader(vader[t])
+            if res: return res # Jika ketemu, langsung return (STOP)
+
+    # 2. Cek UMIGON di context (Hanya jika VADER gagal)
     for t in tokens:
         if t in umigon:
             return umigon[t]
 
-    # 2. Cek VADER di context (Fallback)
-    for t in tokens:
-        if t in vader:
-            return normalize_vader(vader[t])
-
     return None
 
 # ===============================
-# FINAL LABEL FUNCTION
+# FINAL LABEL FUNCTION (Logic VADER First)
 # ===============================
 def label_sentiment(opinion_word, opinion_context, umigon, vader):
     # Bersihkan input
     if pd.isna(opinion_word): opinion_word = ""
     if pd.isna(opinion_context): opinion_context = ""
 
-    # Split kata opini (jika ada koma, misal: "smooth, addictive")
+    # Split kata opini
     words = [
         w.strip()
         for w in re.split(r"[,\s]+", str(opinion_word).lower())
         if w.strip()
     ]
 
-    # PRIORITAS 1: Cek Kata Opini di UMIGON
-    for w in words:
-        if w in umigon:
-            return umigon[w]
+    # --- LOGIC UTAMA: VADER DULUAN ---
 
-    # PRIORITAS 2: Cek Kata Opini di VADER
+    # 1. Cek VADER pada kata opini
     for w in words:
         if w in vader:
             res = normalize_vader(vader[w])
-            if res: return res
+            if res: 
+                return res # KETEMU DI VADER -> SELESAI (JANGAN CEK UMIGON)
 
-    # PRIORITAS 3: Cek Konteks Kalimat (Fallback)
+    # 2. Cek UMIGON pada kata opini (Hanya jalan jika VADER tidak ketemu)
+    for w in words:
+        if w in umigon:
+            return umigon[w] # KETEMU DI UMIGON -> SELESAI
+
+    # 3. Fallback ke Konteks (VADER Context -> UMIGON Context)
     res_context = context_fallback(opinion_context, umigon, vader)
     if res_context:
         return res_context
 
-    # DEFAULT (Jika tidak ketemu di manapun)
-    return "positive" # Bias positif atau bisa diganti 'neutral'
+    # 4. DEFAULT
+    return "positive" # Bias default jika semua gagal
 
 # ===============================
 # PIPELINE ENTRY POINT
@@ -140,12 +144,10 @@ def run(input_path: str, output_path: str):
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input tidak ditemukan: {input_path}")
 
-    # Load dictionaries
-    # Kita gunakan relative path agar aman
-    base_dir = os.path.dirname(os.path.abspath(__file__)) # Folder Preprocessing
-    root_dir = os.path.dirname(base_dir) # Folder Root (absa)
+    # Load dictionaries (Relative Path)
+    base_dir = os.path.dirname(os.path.abspath(__file__)) 
+    root_dir = os.path.dirname(base_dir) 
     
-    # Path absolut ke kamus
     abs_umigon = os.path.join(root_dir, UMIGON_PATH)
     abs_vader = os.path.join(root_dir, VADER_PATH)
 
@@ -158,14 +160,12 @@ def run(input_path: str, output_path: str):
     # Cek kolom wajib
     required_cols = {"opinion_word", "opinion_context"}
     if not required_cols.issubset(df.columns):
-        # Jika kolom opinion_word tidak ada tapi processed_opinion ada, pakai itu
         if "processed_opinion" in df.columns:
             df["opinion_word"] = df["processed_opinion"]
         else:
             raise ValueError("Kolom 'opinion_word' atau 'opinion_context' hilang dari data.")
 
     # Terapkan Pelabelan
-    # Perhatikan urutan argumen: opinion_word, opinion_context, umigon, vader
     df["label_text"] = df.apply(
         lambda row: label_sentiment(
             row.get("opinion_word", ""),
@@ -176,11 +176,11 @@ def run(input_path: str, output_path: str):
         axis=1
     )
 
-    # Konversi ke Angka (Opsional)
+    # Konversi ke Angka
     df["label_sentimen"] = df["label_text"].map({
         "positive": 1,
         "negative": -1
-    }).fillna(0) # 0 untuk netral/tidak diketahui
+    }).fillna(0) 
 
     # Simpan
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

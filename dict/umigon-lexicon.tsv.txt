@@ -1268,7 +1268,7 @@ we lost	negative		12
 weakest	negative	isImmediatelyPrecededBySpecificTerm///is the|are the	12:10
 weird	negative	!isImmediatelyPrecededByANegation	12:10
 whats wrong	negative		12
-what s wrong	negative		12
+phenomal	positive		12
 why on earth	negative		12
 why the hell	negative		12
 whore	negative		12

@@ -241,7 +241,7 @@ if st.session_state['do_analysis']:
         # =====================================================
         # BAGIAN: PREVIEW TABEL DATA
         # =====================================================
-        st.markdown("### 🔍 Deteksi Aspek & Sentimen")
+       st.markdown("### 🔍 Deteksi Aspek & Sentimen")
         
         if os.path.exists(out4):
             df_final = pd.read_excel(out4)
@@ -249,14 +249,19 @@ if st.session_state['do_analysis']:
             # --- CEK APAKAH HASIL KOSONG ---
             if df_final.empty:
                 st.warning("⚠️ **Tidak ada aspek game yang terdeteksi.**")
-                st.session_state['do_analysis'] = False # Reset state
+                st.session_state['do_analysis'] = False
                 st.stop()
             
             df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
             
-            # Tampilan Tabel
+            # --- PERBAIKAN: PILIH KOLOM TERTENTU SAJA ---
+            desired_cols = ["original_review", "opinion_context", "aspect", "label_text"]
+            # Pastikan kolom benar-benar ada di data (untuk menghindari error)
+            display_cols = [col for col in desired_cols if col in df_final.columns]
+            
             with st.expander("📄 Lihat Data Hasil Analisis"):
-                st.dataframe(df_final, use_container_width=True)
+                # Tampilkan hanya kolom yang dipilih
+                st.dataframe(df_final[display_cols], use_container_width=True)
         
         st.markdown("---")
 
@@ -352,5 +357,6 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 
 

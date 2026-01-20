@@ -1274,7 +1274,7 @@ why the hell	negative		12
 whore	negative		12
 whores	negative		12
 wish i	negative	isImmediatelyFollowedBySpecificTerm///had|hadn|did|didn|would|wouldn	12:10
-wish	negative	isImmediatelyFollowedBySpecificTerm///he|they|she|we|people	12:10
+wish	positive	isImmediatelyFollowedBySpecificTerm///he|they|she|we|people	12:10
 be buying	negative		12
 won t be buying	negative		12
 won t buy	negative		12

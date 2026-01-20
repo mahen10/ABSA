@@ -17,32 +17,10 @@ import os
 # ===============================
 # PATH DEFAULT
 # ===============================
-UMIGON_PATH = os.path.join("dict", "umigon-lexicon.tsv.txt")
 VADER_PATH = os.path.join("dict", "vader_lexicon.txt")
 
 
-# ===============================
-# LOAD UMIGON LEXICON
-# ===============================
-def load_umigon(path):
-    df = pd.read_csv(
-        path,
-        sep="\t",
-        header=None,
-        usecols=[0, 1],
-        names=["term", "valence"],
-        engine="python",
-        on_bad_lines="skip"
-    )
 
-    df["term"] = df["term"].astype(str).str.lower().str.strip()
-    df["valence"] = df["valence"].astype(str).str.lower().str.strip()
-    df = df[df["valence"].isin(["positive", "negative"])]
-
-    return dict(zip(df["term"], df["valence"]))
-
-
-# ===============================
 # LOAD VADER LEXICON
 # ===============================
 def load_vader(path):
@@ -70,14 +48,10 @@ def load_vader(path):
 # ===============================
 # CONTEXT FALLBACK
 # ===============================
-def context_fallback(text, umigon, vader):
+def context_fallback(text, vader):
     tokens = re.findall(r"\b\w+\b", str(text).lower())
 
-    # UMIGON first
-    for t in tokens:
-        if t in umigon:
-            return umigon[t]
-
+    
     # VADER fallback
     for t in tokens:
         if t in vader:
@@ -89,7 +63,7 @@ def context_fallback(text, umigon, vader):
 # ===============================
 # FINAL LABEL FUNCTION
 # ===============================
-def label_sentiment(opinion_word, opinion_context, umigon, vader):
+def label_sentiment(opinion_word, opinion_context, vader):
 
     # split opinion_word (comma / space safe)
     words = [
@@ -99,17 +73,14 @@ def label_sentiment(opinion_word, opinion_context, umigon, vader):
     ]
 
     # 1️⃣ UMIGON — opinion word
-    for w in words:
-        if w in umigon:
-            return umigon[w]
-
+   
     # 2️⃣ VADER — opinion word
     for w in words:
         if w in vader:
             return "positive" if vader[w] > 0 else "negative"
 
     # 3️⃣ CONTEXT FALLBACK
-    return context_fallback(opinion_context, umigon, vader)
+    return context_fallback(opinion_context, vader)
 
 
 # ===============================
@@ -123,13 +94,11 @@ def run(input_path: str, output_path: str):
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input tidak ditemukan: {input_path}")
 
-    if not os.path.exists(UMIGON_PATH):
-        raise FileNotFoundError("UMIGON lexicon tidak ditemukan")
+    
 
     if not os.path.exists(VADER_PATH):
         raise FileNotFoundError("VADER lexicon tidak ditemukan")
 
-    umigon = load_umigon(UMIGON_PATH)
     vader = load_vader(VADER_PATH)
 
     df = pd.read_excel(input_path)
@@ -142,7 +111,6 @@ def run(input_path: str, output_path: str):
         lambda row: label_sentiment(
             row["opinion_word"],
             row["opinion_context"],
-            umigon,
             vader
         ),
         axis=1

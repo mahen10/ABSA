@@ -265,4 +265,81 @@ if start_process:
         
         # --- FITUR AI COPILOT ---
         # Panggil fungsi generate_smart_insight
-        ai_summary = generate_smart_insight(df
+        ai_summary = generate_smart_insight(df_final, result.get('accuracy', 0)*100)
+        st.info(ai_summary) # Tampilkan summary
+        
+        # Metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Data", total)
+        col2.metric("Positive", pos, delta="Good", delta_color="normal")
+        col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
+
+        # Tombol Download
+        with open(out4, "rb") as f:
+            col4.download_button(
+                "⬇ Download Hasil",
+                data=f,
+                file_name="hasil_analisis.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        st.markdown("---")
+
+        # --- GRAFIK KIRI & KANAN ---
+        c_left, c_right = st.columns([1, 1])
+
+        with c_left:
+            st.subheader("📊 Distribusi Sentimen")
+            fig1, ax1 = plt.subplots(figsize=(6, 3)) 
+            counts = df_final["label_text"].value_counts()
+            
+            if not counts.empty:
+                colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
+                counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
+                ax1.set_xlabel("Jumlah")
+                st.pyplot(fig1, use_container_width=False)
+            else:
+                st.write("Tidak ada data.")
+
+        with c_right:
+            st.subheader("🤖 Evaluasi Model")
+            # Jika result kosong (dummy), tampilkan pesan
+            if result['accuracy'] == 0 and total < 5:
+                st.info("Akurasi: 0% (Data terlalu sedikit untuk split test).")
+            else:
+                st.write(f"**Akurasi Dataset (Test Split): {result['accuracy']:.2%}**")
+            
+            cm_df = pd.DataFrame(
+                result["confusion_matrix"], 
+                index=["Aktual Neg", "Aktual Pos"], 
+                columns=["Prediksi Neg", "Prediksi Pos"]
+            )
+            st.table(cm_df)
+        
+        # --- GRAFIK ASPEK ---
+        st.markdown("---")
+        st.subheader("🧩 Analisis Detail Per Aspek")
+        
+        aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
+        
+        if not aspect_sentiment.empty:
+            if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
+            if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
+            
+            fig2, ax2 = plt.subplots(figsize=(10, 4))
+            aspect_sentiment[['positive', 'negative']].plot(
+                kind='bar', ax=ax2, color=['#4CAF50', '#F44336'], width=0.7
+            )
+            ax2.set_ylabel("Jumlah")
+            ax2.set_xlabel("Aspek")
+            plt.xticks(rotation=45, ha='right')
+            st.pyplot(fig2)
+        else:
+            st.info("Belum cukup data aspek.")
+
+    except Exception:
+        st.error("❌ Terjadi error sistem")
+        st.code(traceback.format_exc())
+
+elif not start_process and uploaded_file is None and input_mode == "📂 Upload Excel":
+    st.info("👈 Silakan upload file Excel di menu sebelah kiri.")

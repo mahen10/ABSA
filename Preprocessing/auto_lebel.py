@@ -1,6 +1,13 @@
 # =====================================================
-# FILE: Preprocessing/auto_lebel.py
-# Deskripsi: Auto Label (Smart Logic: Gaming Dict + Negation Handling)
+# FILE: auto_lebel.py
+# Deskripsi:
+# Auto Label Sentimen (Text)
+# - UMIGON (priority)
+# - VADER (fallback)
+# - Word-first → context fallback
+# Output:
+# - label_text (positive / negative)
+# - label_sentimen (1 / -1)
 # =====================================================
 
 import pandas as pd
@@ -13,181 +20,140 @@ import os
 UMIGON_PATH = os.path.join("dict", "umigon-lexicon.tsv.txt")
 VADER_PATH = os.path.join("dict", "vader_lexicon.txt")
 
-# ===============================
-# 1. KAMUS SPESIFIK GAMING (Wajib untuk Akurasi Tinggi)
-# ===============================
-GAMING_DICT = {
-    # Positif
-    "addictive": "positive", "masterpiece": "positive", "cinema": "positive",
-    "kino": "positive", "solid": "positive", "smooth": "positive",
-    "crisp": "positive", "fun": "positive", "optimized": "positive",
-    "immersive": "positive",
-    
-    # Negatif
-    "refund": "negative", "crash": "negative", "unplayable": "negative",
-    "bug": "negative", "buggy": "negative", "trash": "negative",
-    "garbage": "negative", "clunky": "negative", "lag": "negative",
-    "stutter": "negative", "fps drops": "negative", "boring": "negative",
-    "repetitive": "negative", "broken": "negative", "woke": "negative"
-}
 
 # ===============================
-# 2. LOAD DICTIONARIES
+# LOAD UMIGON LEXICON
+# ===============================
+def load_umigon(path):
+    df = pd.read_csv(
+        path,
+        sep="\t",
+        header=None,
+        usecols=[0, 1],
+        names=["term", "valence"],
+        engine="python",
+        on_bad_lines="skip"
+    )
+
+    df["term"] = df["term"].astype(str).str.lower().str.strip()
+    df["valence"] = df["valence"].astype(str).str.lower().str.strip()
+    df = df[df["valence"].isin(["positive", "negative"])]
+
+    return dict(zip(df["term"], df["valence"]))
+
+
+# ===============================
+# LOAD VADER LEXICON
 # ===============================
 def load_vader(path):
     vader = {}
-    if not os.path.exists(path): return vader
+
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            if not line.strip(): continue
+            if not line.strip():
+                continue
+
             parts = line.split("\t")
-            if len(parts) < 2: continue
-            try: vader[parts[0].lower().strip()] = float(parts[1])
-            except: continue
+            if len(parts) < 2:
+                continue
+
+            word = parts[0].lower().strip()
+            try:
+                score = float(parts[1])
+                vader[word] = score
+            except:
+                continue
+
     return vader
 
-def load_umigon(path):
-    if not os.path.exists(path): return {}
-    try:
-        df = pd.read_csv(path, sep="\t", header=None, usecols=[0, 1],
-                         names=["term", "valence"], engine="python", on_bad_lines="skip")
-        df["term"] = df["term"].astype(str).str.lower().str.strip()
-        df["valence"] = df["valence"].astype(str).str.lower().str.strip()
-        return dict(zip(df["term"], df["valence"]))
-    except: return {}
 
 # ===============================
-# 3. SMART LOGIC: NEGATION CHECK
+# CONTEXT FALLBACK
 # ===============================
-def check_negation(word, context_str):
-    """
-    Mengecek apakah ada kata 'not', 'no', 'never' dsb 
-    dalam jarak 3 kata SEBELUM kata target di dalam konteks.
-    """
-    if pd.isna(context_str) or not context_str:
-        return False
-    
-    context_str = str(context_str).lower()
-    word = str(word).lower()
-    
-    # Cari posisi kata di konteks
-    # Kita pakai regex boundary \b agar akurat
-    matches = list(re.finditer(r'\b' + re.escape(word) + r'\b', context_str))
-    
-    if not matches:
-        return False
-        
-    # Ambil match pertama saja untuk simplifikasi
-    start_index = matches[0].start()
-    
-    # Ambil teks sebelum kata tersebut (max 20 karakter mundur)
-    preceding_text = context_str[max(0, start_index - 25) : start_index]
-    
-    # Kata-kata negasi
-    negations = ["not", "no", "never", "n't", "hardly", "barely", "lack"]
-    
-    # Cek apakah ada negasi di teks sebelumnya
-    tokens = re.split(r'\s+', preceding_text.strip())
-    # Ambil 3 kata terakhir sebelum target
-    last_3_tokens = tokens[-3:] 
-    
-    for t in last_3_tokens:
-        if any(neg in t for neg in negations):
-            return True
-            
-    return False
+def context_fallback(text, umigon, vader):
+    tokens = re.findall(r"\b\w+\b", str(text).lower())
 
-def flip_sentiment(label):
-    if label == "positive": return "negative"
-    if label == "negative": return "positive"
-    return label
+    # UMIGON first
+    for t in tokens:
+        if t in umigon:
+            return umigon[t]
+
+    # VADER fallback
+    for t in tokens:
+        if t in vader:
+            return "positive" if vader[t] > 0 else "negative"
+
+    return None
+
 
 # ===============================
 # FINAL LABEL FUNCTION
 # ===============================
 def label_sentiment(opinion_word, opinion_context, umigon, vader):
-    op_word = str(opinion_word).lower().strip() if pd.notna(opinion_word) else ""
-    # Pecah jika ada koma (misal "smooth, fun")
-    words = [w.strip() for w in re.split(r'[,\s]+', op_word) if w.strip()]
-    
-    final_label = None
-    
-    # --- LOGIC LOOP ---
-    for w in words:
-        current_label = None
-        
-        # 1. Cek Gaming Dict (Priority 1)
-        if w in GAMING_DICT:
-            current_label = GAMING_DICT[w]
-            
-        # 2. Cek Umigon (Priority 2)
-        elif w in umigon:
-            current_label = umigon[w]
-            
-        # 3. Cek Vader (Priority 3)
-        elif w in vader:
-            score = vader[w]
-            if score >= 0.05: current_label = "positive"
-            elif score <= -0.05: current_label = "negative"
-            
-        # --- JIKA KETEMU LABEL, CEK NEGASI ---
-        if current_label:
-            # Cek apakah ada kata "not" sebelumnya di konteks
-            is_negated = check_negation(w, opinion_context)
-            if is_negated:
-                current_label = flip_sentiment(current_label)
-            
-            return current_label # Langsung return (First Match Logic)
 
-    # --- FALLBACK: CONTEXT SCAN ---
-    # Jika opinion_word tidak ketemu di kamus manapun, scan konteksnya
-    if pd.notna(opinion_context):
-        ctx_tokens = re.findall(r"\b\w+\b", str(opinion_context).lower())
-        for t in ctx_tokens:
-            if t in GAMING_DICT: return GAMING_DICT[t] # Cek gaming dict di konteks
-            
-    return "positive" # Bias default
+    # split opinion_word (comma / space safe)
+    words = [
+        w.strip()
+        for w in re.split(r"[,\s]+", str(opinion_word).lower())
+        if w.strip()
+    ]
+
+    # 1️⃣ UMIGON — opinion word
+    for w in words:
+        if w in umigon:
+            return umigon[w]
+
+    # 2️⃣ VADER — opinion word
+    for w in words:
+        if w in vader:
+            return "positive" if vader[w] > 0 else "negative"
+
+    # 3️⃣ CONTEXT FALLBACK
+    return context_fallback(opinion_context, umigon, vader)
+
 
 # ===============================
 # PIPELINE ENTRY POINT
 # ===============================
 def run(input_path: str, output_path: str):
+    """
+    Dipanggil dari app.py
+    """
+
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input tidak ditemukan: {input_path}")
 
-    # Load dictionaries
-    base_dir = os.path.dirname(os.path.abspath(__file__)) 
-    root_dir = os.path.dirname(base_dir) 
-    
-    umigon = load_umigon(os.path.join(root_dir, UMIGON_PATH))
-    vader = load_vader(os.path.join(root_dir, VADER_PATH))
+    if not os.path.exists(UMIGON_PATH):
+        raise FileNotFoundError("UMIGON lexicon tidak ditemukan")
 
-    # Baca Data
+    if not os.path.exists(VADER_PATH):
+        raise FileNotFoundError("VADER lexicon tidak ditemukan")
+
+    umigon = load_umigon(UMIGON_PATH)
+    vader = load_vader(VADER_PATH)
+
     df = pd.read_excel(input_path)
 
-    # Handle kolom
-    target_col = "opinion_word"
-    context_col = "opinion_context"
-    
-    if target_col not in df.columns and "processed_opinion" in df.columns:
-        target_col = "processed_opinion" # Fallback
+    required_cols = {"opinion_word", "opinion_context"}
+    if not required_cols.issubset(df.columns):
+        raise ValueError("Kolom opinion_word / opinion_context tidak lengkap")
 
-    # Proses
     df["label_text"] = df.apply(
         lambda row: label_sentiment(
-            row.get(target_col, ""),
-            row.get(context_col, ""),
+            row["opinion_word"],
+            row["opinion_context"],
             umigon,
             vader
         ),
         axis=1
     )
 
-    # Map ke angka
-    df["label_sentimen"] = df["label_text"].map({"positive": 1, "negative": -1}).fillna(0)
+    df["label_sentimen"] = df["label_text"].map({
+        "positive": 1,
+        "negative": -1
+    })
 
-    # Simpan
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_excel(output_path, index=False)
 
-    return df
+    return output_path

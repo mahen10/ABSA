@@ -166,7 +166,7 @@ with st.sidebar:
     # --- MODE 3: SCRAPING STEAM ---
     elif input_mode == "🕷️ Scraping Steam ID":
         st.info("Masukkan App ID dari URL Steam Store.")
-        app_id = st.text_input("Steam App ID:", value="1091500")
+        app_id = st.text_input("Steam App ID:", value="Masukan ID game yang ingin anda analisis")
         limit = st.slider("Jumlah Ulasan diambil:", 10, 500, 50)
         
         if st.button("🕷️ Mulai Scraping & Analisis", key="btn_scrape"):
@@ -352,3 +352,4 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+

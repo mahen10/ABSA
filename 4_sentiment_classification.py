@@ -7,8 +7,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
-from imblearn.over_sampling import SMOTE
-from imblearn.combine import SMOTETomek
+from sklearn.utils import resample
 
 def run(input_path, output_dir):
     if not os.path.exists(input_path):
@@ -37,32 +36,60 @@ def run(input_path, output_dir):
     
     # Check class distribution
     class_counts = df["label_text"].value_counts()
-    st.info(f"📊 Class Distribution: {dict(class_counts)}")
+    st.info(f"📊 Class Distribution BEFORE balancing: {dict(class_counts)}")
     
     unique_labels = df["label_text"].unique()
     if len(unique_labels) < 2:
         st.warning(f"⚠️ Data hanya 1 kelas: {unique_labels}.")
         return create_dummy_result(accuracy=1.0)
     
+    # ✅ PERBAIKAN 1: Manual Oversampling (tanpa imbalanced-learn)
+    minority_class = class_counts.idxmin()
+    majority_class = class_counts.idxmax()
+    minority_count = class_counts[minority_class]
+    majority_count = class_counts[majority_class]
+    imbalance_ratio = majority_count / minority_count
+    
+    if imbalance_ratio > 2.0 and minority_count >= 5:
+        st.info(f"🔄 Applying Manual Oversampling (ratio: {imbalance_ratio:.1f}:1)")
+        
+        # Separate classes
+        df_majority = df[df["label_text"] == majority_class]
+        df_minority = df[df["label_text"] == minority_class]
+        
+        # Oversample minority class
+        df_minority_upsampled = resample(
+            df_minority,
+            replace=True,
+            n_samples=majority_count,
+            random_state=42
+        )
+        
+        # Combine back
+        df = pd.concat([df_majority, df_minority_upsampled])
+        df = df.sample(frac=1, random_state=42).reset_index(drop=True)  # Shuffle
+        
+        st.success(f"✅ Balanced classes: {dict(df['label_text'].value_counts())}")
+    
     # Feature extraction
     X = df["feature_text"].astype(str)
     y = df["label_text"]
     
-    # ✅ PERBAIKAN 1: TF-IDF dengan char n-grams (tangkap negation pattern)
+    # ✅ PERBAIKAN 2: TF-IDF tanpa stop words (keep negations!)
     n_samples = len(X)
     use_min_df = 1 if n_samples < 20 else 2
     
     tfidf = TfidfVectorizer(
-        ngram_range=(1, 3),  # Unigram to trigram
+        ngram_range=(1, 3),
         max_df=0.95,
         min_df=use_min_df,
-        sublinear_tf=True,  # Logarithmic scaling
+        sublinear_tf=True,
         analyzer='word',
-        stop_words=None  # ✅ Keep negation words!
+        stop_words=None  # Keep "not", "no", etc.
     )
     X_tfidf = tfidf.fit_transform(X)
     
-    # ✅ PERBAIKAN 2: Handle Class Imbalance dengan SMOTE
+    # Train-test split
     if n_samples < 5:
         X_train, X_test, y_train, y_test = X_tfidf, X_tfidf, y, y
         st.warning("⚠️ Dataset terlalu kecil, tidak ada train-test split.")
@@ -71,18 +98,6 @@ def run(input_path, output_dir):
             X_train, X_test, y_train, y_test = train_test_split(
                 X_tfidf, y, test_size=0.2, random_state=42, stratify=y
             )
-            
-            # Apply SMOTE only if class imbalance > 2:1
-            minority_class_count = min(y_train.value_counts())
-            majority_class_count = max(y_train.value_counts())
-            imbalance_ratio = majority_class_count / minority_class_count
-            
-            if imbalance_ratio > 2.0 and minority_class_count >= 6:
-                st.info(f"🔄 Applying SMOTE (imbalance ratio: {imbalance_ratio:.1f}:1)")
-                smote = SMOTE(random_state=42, k_neighbors=min(5, minority_class_count-1))
-                X_train, y_train = smote.fit_resample(X_train, y_train)
-                st.success(f"✅ Balanced classes: {dict(pd.Series(y_train).value_counts())}")
-            
         except ValueError as e:
             st.warning(f"⚠️ Stratified split gagal: {e}")
             X_train, X_test, y_train, y_test = train_test_split(
@@ -92,9 +107,9 @@ def run(input_path, output_dir):
     # ✅ PERBAIKAN 3: Model dengan hyperparameter tuning
     model = LogisticRegression(
         max_iter=5000,
-        class_weight="balanced",  # Fallback weight adjustment
-        solver="saga",  # Better for large datasets
-        C=0.5,  # Stronger regularization
+        class_weight="balanced",
+        solver="saga",
+        C=0.5,
         penalty="l2",
         random_state=42
     )
@@ -111,7 +126,7 @@ def run(input_path, output_dir):
             "confusion_matrix": confusion_matrix(y_test, y_pred, labels=["negative", "positive"])
         }
         
-        # Feature importance analysis
+        # Feature importance
         feature_names = tfidf.get_feature_names_out()
         coefficients = model.coef_[0]
         
@@ -168,7 +183,7 @@ def display_results(results, y_test, y_pred):
         st.markdown("#### 📈 Class Performance")
         plot_class_metrics_elegant(report)
     
-    # ✅ Feature Importance Display
+    # Feature importance
     if "top_features" in results:
         st.markdown("---")
         st.markdown("### 🔍 Top Influential Features")

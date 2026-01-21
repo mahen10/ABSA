@@ -1,7 +1,3 @@
-# =====================================================
-# FILE: 4_sentiment_classification.py
-# PERBAIKAN: Training menggunakan 'opinion_context'
-# =====================================================
 import pandas as pd
 import os
 import numpy as np
@@ -11,90 +7,96 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE
+from imblearn.combine import SMOTETomek
 
 def run(input_path, output_dir):
-    # ============================
-    # Load data
-    # ============================
     if not os.path.exists(input_path):
         raise FileNotFoundError("File input tidak ditemukan")
     
     df = pd.read_excel(input_path)
     
-    # KITA BUTUH OPINION CONTEXT UNTUK FITUR, DAN LABEL UNTUK TARGET
+    # Setup feature text
     required_cols = {"opinion_context", "label_text"}
-    
     if not required_cols.issubset(df.columns):
-        # Fallback jika context tidak ada, pakai processed_opinion
         if "processed_opinion" in df.columns:
-            st.warning("⚠️ Menggunakan 'processed_opinion' karena 'opinion_context' tidak ada. Akurasi mungkin rendah.")
+            st.warning("⚠️ Menggunakan 'processed_opinion' karena 'opinion_context' tidak ada.")
             df["feature_text"] = df["processed_opinion"]
         else:
             raise ValueError("Kolom opinion_context tidak ditemukan!")
     else:
-        # PENGGUNAAN CONTEXT ADALAH KUNCI AKURASI TINGGI
         df["feature_text"] = df["opinion_context"]
-
+    
     df = df.dropna(subset=["feature_text", "label_text"])
     df["label_text"] = df["label_text"].str.lower().str.strip()
-    
-    # Filter hanya positive/negative
     df = df[df["label_text"].isin(["positive", "negative"])]
     df = df[df["feature_text"].astype(str).str.strip() != ""]
     
     if df.empty:
         return create_dummy_result()
     
+    # Check class distribution
+    class_counts = df["label_text"].value_counts()
+    st.info(f"📊 Class Distribution: {dict(class_counts)}")
+    
     unique_labels = df["label_text"].unique()
     if len(unique_labels) < 2:
-        st.warning(f"⚠️ Data hanya 1 kelas: {unique_labels}. Butuh min 2 kelas.")
+        st.warning(f"⚠️ Data hanya 1 kelas: {unique_labels}.")
         return create_dummy_result(accuracy=1.0)
-
-    # ============================
-    # Split X dan y
-    # ============================
-    # X SEKARANG ADALAH KALIMAT UTUH (CONTEXT)
+    
+    # Feature extraction
     X = df["feature_text"].astype(str)
     y = df["label_text"]
     
-    # ============================
-    # TF-IDF (Dinamis)
-    # ============================
+    # ✅ PERBAIKAN 1: TF-IDF dengan char n-grams (tangkap negation pattern)
     n_samples = len(X)
-    use_min_df = 2 if n_samples >= 10 else 1 # Turunkan min_df agar kata unik tetap terambil
-    use_max_df = 0.95 
-
+    use_min_df = 1 if n_samples < 20 else 2
+    
     tfidf = TfidfVectorizer(
-        ngram_range=(1, 2), # Unigram & Bigram (penting untuk menangkap "not good")
-        max_df=use_max_df,
+        ngram_range=(1, 3),  # Unigram to trigram
+        max_df=0.95,
         min_df=use_min_df,
-        stop_words="english"
+        sublinear_tf=True,  # Logarithmic scaling
+        analyzer='word',
+        stop_words=None  # ✅ Keep negation words!
     )
     X_tfidf = tfidf.fit_transform(X)
     
-    # ============================
-    # Train-Test Split
-    # ============================
+    # ✅ PERBAIKAN 2: Handle Class Imbalance dengan SMOTE
     if n_samples < 5:
         X_train, X_test, y_train, y_test = X_tfidf, X_tfidf, y, y
+        st.warning("⚠️ Dataset terlalu kecil, tidak ada train-test split.")
     else:
         try:
             X_train, X_test, y_train, y_test = train_test_split(
                 X_tfidf, y, test_size=0.2, random_state=42, stratify=y
             )
-        except ValueError:
+            
+            # Apply SMOTE only if class imbalance > 2:1
+            minority_class_count = min(y_train.value_counts())
+            majority_class_count = max(y_train.value_counts())
+            imbalance_ratio = majority_class_count / minority_class_count
+            
+            if imbalance_ratio > 2.0 and minority_class_count >= 6:
+                st.info(f"🔄 Applying SMOTE (imbalance ratio: {imbalance_ratio:.1f}:1)")
+                smote = SMOTE(random_state=42, k_neighbors=min(5, minority_class_count-1))
+                X_train, y_train = smote.fit_resample(X_train, y_train)
+                st.success(f"✅ Balanced classes: {dict(pd.Series(y_train).value_counts())}")
+            
+        except ValueError as e:
+            st.warning(f"⚠️ Stratified split gagal: {e}")
             X_train, X_test, y_train, y_test = train_test_split(
                 X_tfidf, y, test_size=0.2, random_state=42
             )
     
-    # ============================
-    # Logistic Regression
-    # ============================
+    # ✅ PERBAIKAN 3: Model dengan hyperparameter tuning
     model = LogisticRegression(
-        max_iter=3000,
-        class_weight="balanced",
-        solver="lbfgs",
-        C=1.0 # Default regularization
+        max_iter=5000,
+        class_weight="balanced",  # Fallback weight adjustment
+        solver="saga",  # Better for large datasets
+        C=0.5,  # Stronger regularization
+        penalty="l2",
+        random_state=42
     )
     
     try:
@@ -106,16 +108,28 @@ def run(input_path, output_dir):
             "classification_report": classification_report(
                 y_test, y_pred, output_dict=True, zero_division=0
             ),
-            "confusion_matrix": confusion_matrix(y_test, y_pred)
+            "confusion_matrix": confusion_matrix(y_test, y_pred, labels=["negative", "positive"])
         }
+        
+        # Feature importance analysis
+        feature_names = tfidf.get_feature_names_out()
+        coefficients = model.coef_[0]
+        
+        top_positive = sorted(zip(feature_names, coefficients), key=lambda x: x[1], reverse=True)[:10]
+        top_negative = sorted(zip(feature_names, coefficients), key=lambda x: x[1])[:10]
+        
+        results["top_features"] = {
+            "positive": top_positive,
+            "negative": top_negative
+        }
+        
     except Exception as e:
-        st.error(f"Gagal melatih model: {str(e)}")
+        st.error(f"❌ Gagal melatih model: {str(e)}")
         return create_dummy_result()
     
     display_results(results, y_test, y_pred)
     return results
 
-# --- (FUNGSI VISUALISASI DI BAWAH SAMA SEPERTI SEBELUMNYA) ---
 def create_dummy_result(accuracy=0.0):
     return {
         "accuracy": accuracy,
@@ -134,9 +148,11 @@ def display_results(results, y_test, y_pred):
     report = results["classification_report"]
     
     def get_metric(metric_type, metric_name):
-        try: return report[metric_type][metric_name]
-        except KeyError: return 0.0
-
+        try:
+            return report[metric_type][metric_name]
+        except KeyError:
+            return 0.0
+    
     acc = results.get('accuracy', 0)
     col1.metric("Accuracy", f"{acc:.2%}")
     col2.metric("Precision (Avg)", f"{get_metric('weighted avg', 'precision'):.2%}")
@@ -151,6 +167,22 @@ def display_results(results, y_test, y_pred):
     with c2:
         st.markdown("#### 📈 Class Performance")
         plot_class_metrics_elegant(report)
+    
+    # ✅ Feature Importance Display
+    if "top_features" in results:
+        st.markdown("---")
+        st.markdown("### 🔍 Top Influential Features")
+        col_pos, col_neg = st.columns(2)
+        
+        with col_pos:
+            st.markdown("**Positive Indicators:**")
+            pos_df = pd.DataFrame(results["top_features"]["positive"], columns=["Feature", "Weight"])
+            st.dataframe(pos_df.style.format({"Weight": "{:.3f}"}), use_container_width=True)
+        
+        with col_neg:
+            st.markdown("**Negative Indicators:**")
+            neg_df = pd.DataFrame(results["top_features"]["negative"], columns=["Feature", "Weight"])
+            st.dataframe(neg_df.style.format({"Weight": "{:.3f}"}), use_container_width=True)
     
     with st.expander("📋 Detailed Classification Report"):
         st.dataframe(pd.DataFrame(report).transpose().round(3), use_container_width=True)
@@ -175,10 +207,23 @@ def plot_class_metrics_elegant(report):
     data = []
     for metric in metrics:
         vals = [report[cls][metric] for cls in classes]
-        data.append(go.Bar(name=metric.capitalize(), x=[c.capitalize() for c in classes], y=vals, text=[f'{v:.2%}' for v in vals], textposition='auto'))
+        data.append(go.Bar(
+            name=metric.capitalize(), 
+            x=[c.capitalize() for c in classes], 
+            y=vals, 
+            text=[f'{v:.2%}' for v in vals], 
+            textposition='auto'
+        ))
     
     fig = go.Figure(data=data)
-    fig.update_layout(barmode='group', height=300, margin=dict(l=20,r=20,t=20,b=20), plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1))
+    fig.update_layout(
+        barmode='group', 
+        height=300, 
+        margin=dict(l=20,r=20,t=20,b=20), 
+        plot_bgcolor='rgba(0,0,0,0)', 
+        legend=dict(orientation="h", y=1.1)
+    )
     colors = ['#3D5A80', '#98C1D9', '#EE6C4D']
-    for i, trace in enumerate(fig.data): trace.marker.color = colors[i]
+    for i, trace in enumerate(fig.data):
+        trace.marker.color = colors[i]
     st.plotly_chart(fig, use_container_width=True)

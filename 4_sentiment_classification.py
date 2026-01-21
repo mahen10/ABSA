@@ -114,7 +114,7 @@ def run(input_path, output_dir):
     
     # ✅ Model with adjusted parameters
     model = LogisticRegression(
-        max_iter=3000,
+        max_iter=1000,
         class_weight="balanced",  # Tetap pakai balanced weight
         solver="lbfgs",  # Kembali ke lbfgs (lebih stabil)
         C=1.0,  # Default regularization

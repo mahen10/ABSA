@@ -7,153 +7,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.utils import resample
 
-def run(input_path, output_dir):
-    if not os.path.exists(input_path):
-        raise FileNotFoundError("File input tidak ditemukan")
-    
-    df = pd.read_excel(input_path)
-    
-    # Setup feature text
-    required_cols = {"opinion_context", "label_text"}
-    if not required_cols.issubset(df.columns):
-        if "processed_opinion" in df.columns:
-            st.warning("⚠️ Menggunakan 'processed_opinion' karena 'opinion_context' tidak ada.")
-            df["feature_text"] = df["processed_opinion"]
-        else:
-            raise ValueError("Kolom opinion_context tidak ditemukan!")
-    else:
-        df["feature_text"] = df["opinion_context"]
-    
-    df = df.dropna(subset=["feature_text", "label_text"])
-    df["label_text"] = df["label_text"].str.lower().str.strip()
-    df = df[df["label_text"].isin(["positive", "negative"])]
-    df = df[df["feature_text"].astype(str).str.strip() != ""]
-    
-    if df.empty:
-        return create_dummy_result()
-    
-    # Check class distribution
-    class_counts = df["label_text"].value_counts()
-    st.info(f"📊 Original Class Distribution: {dict(class_counts)}")
-    
-    unique_labels = df["label_text"].unique()
-    if len(unique_labels) < 2:
-        st.warning(f"⚠️ Data hanya 1 kelas: {unique_labels}.")
-        return create_dummy_result(accuracy=1.0)
-    
-    # Feature extraction
-    X = df["feature_text"].astype(str)
-    y = df["label_text"]
-    
-    # ✅ TF-IDF Configuration
-    n_samples = len(X)
-    use_min_df = 1 if n_samples < 20 else 2
-    
-    tfidf = TfidfVectorizer(
-        ngram_range=(1, 2),  # Kembali ke 1-2 (lebih stabil)
-        max_df=0.9,  # Turunkan dari 0.95
-        min_df=use_min_df,
-        sublinear_tf=True,
-        analyzer='word',
-        stop_words=None
-    )
-    X_tfidf = tfidf.fit_transform(X)
-    
-    # ✅ PERBAIKAN UTAMA: Split DULU, baru balancing
-    if n_samples < 5:
-        X_train, X_test, y_train, y_test = X_tfidf, X_tfidf, y, y
-        st.warning("⚠️ Dataset terlalu kecil, tidak ada train-test split.")
-    else:
-        try:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X_tfidf, y, test_size=0.2, random_state=42, stratify=y
-            )
-        except ValueError as e:
-            st.warning(f"⚠️ Stratified split gagal: {e}")
-            X_train, X_test, y_train, y_test = train_test_split(
-                X_tfidf, y, test_size=0.2, random_state=42
-            )
-        
-        # ✅ Apply balancing HANYA pada training set
-        train_counts = pd.Series(y_train).value_counts()
-        minority_class = train_counts.idxmin()
-        majority_class = train_counts.idxmax()
-        minority_count = train_counts[minority_class]
-        majority_count = train_counts[majority_class]
-        imbalance_ratio = majority_count / minority_count
-        
-        if imbalance_ratio > 2.5 and minority_count >= 10:  # Threshold lebih ketat
-            st.info(f"🔄 Balancing training set (ratio: {imbalance_ratio:.1f}:1)")
-            
-            # Convert sparse matrix to indices
-            train_indices = np.arange(len(y_train))
-            minority_indices = train_indices[y_train == minority_class]
-            majority_indices = train_indices[y_train == majority_class]
-            
-            # Oversample minority to 70% of majority (not 100%)
-            target_minority_count = int(majority_count * 0.7)
-            
-            minority_upsampled_idx = resample(
-                minority_indices,
-                replace=True,
-                n_samples=target_minority_count,
-                random_state=42
-            )
-            
-            # Combine indices
-            balanced_indices = np.concatenate([majority_indices, minority_upsampled_idx])
-            np.random.shuffle(balanced_indices)
-            
-            # Apply to training data
-            X_train = X_train[balanced_indices]
-            y_train = y_train.iloc[balanced_indices].reset_index(drop=True)
-            
-            st.success(f"✅ Training set balanced: {dict(pd.Series(y_train).value_counts())}")
-    
-    # ✅ Model with adjusted parameters
-    model = LogisticRegression(
-        max_iter=1000,
-        class_weight="balanced",  # Tetap pakai balanced weight
-        solver="lbfgs",  # Kembali ke lbfgs (lebih stabil)
-        C=1.0,  # Default regularization
-        penalty="l2",
-        random_state=42
-    )
-    
-    try:
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        
-        results = {
-            "accuracy": accuracy_score(y_test, y_pred),
-            "classification_report": classification_report(
-                y_test, y_pred, output_dict=True, zero_division=0
-            ),
-            "confusion_matrix": confusion_matrix(y_test, y_pred, labels=["negative", "positive"])
-        }
-        
-        # Feature importance
-        feature_names = tfidf.get_feature_names_out()
-        coefficients = model.coef_[0]
-        
-        top_positive = sorted(zip(feature_names, coefficients), key=lambda x: x[1], reverse=True)[:10]
-        top_negative = sorted(zip(feature_names, coefficients), key=lambda x: x[1])[:10]
-        
-        results["top_features"] = {
-            "positive": top_positive,
-            "negative": top_negative
-        }
-        
-    except Exception as e:
-        st.error(f"❌ Gagal melatih model: {str(e)}")
-        return create_dummy_result()
-    
-    display_results(results, y_test, y_pred)
-    return results
+# ==========================================
+# 1. HELPER FUNCTIONS (Visualisasi & Dummy)
+# ==========================================
 
 def create_dummy_result(accuracy=0.0):
+    """Membuat hasil kosong jika terjadi error atau data kosong."""
     return {
         "accuracy": accuracy,
         "classification_report": {
@@ -164,9 +24,58 @@ def create_dummy_result(accuracy=0.0):
         "confusion_matrix": np.array([[0, 0], [0, 0]])
     }
 
+def plot_confusion_matrix_elegant(cm):
+    """Plot Confusion Matrix yang estetik menggunakan Plotly."""
+    labels = ['Negative', 'Positive']
+    # Hitung persentase
+    cm_sum = cm.sum(axis=1)[:, None]
+    cm_p = np.divide(cm.astype('float'), cm_sum, out=np.zeros_like(cm.astype('float')), where=cm_sum!=0) * 100
+    
+    text = [[f"{cm[i][j]}<br>({cm_p[i][j]:.1f}%)" for j in range(len(cm[i]))] for i in range(len(cm))]
+    
+    fig = go.Figure(data=go.Heatmap(
+        z=cm, x=labels, y=labels, text=text,
+        texttemplate="%{text}", textfont={"size": 14, "color": "white"},
+        colorscale=[[0, '#3D5A80'], [0.5, '#98C1D9'], [1, '#EE6C4D']], showscale=False
+    ))
+    fig.update_layout(height=300, margin=dict(l=20,r=20,t=20,b=20), plot_bgcolor='rgba(0,0,0,0)')
+    st.plotly_chart(fig, use_container_width=True)
+
+def plot_class_metrics_elegant(report):
+    """Plot Metrics (Precision, Recall, F1) per kelas."""
+    classes = [c for c in ['negative', 'positive'] if c in report]
+    metrics = ['precision', 'recall', 'f1-score']
+    data = []
+    
+    colors = ['#3D5A80', '#98C1D9', '#EE6C4D']
+    
+    for i, metric in enumerate(metrics):
+        vals = [report[cls][metric] for cls in classes]
+        data.append(go.Bar(
+            name=metric.capitalize(), 
+            x=[c.capitalize() for c in classes], 
+            y=vals, 
+            text=[f'{v:.2%}' for v in vals], 
+            textposition='auto',
+            marker_color=colors[i]
+        ))
+    
+    fig = go.Figure(data=data)
+    fig.update_layout(
+        barmode='group', 
+        height=300, 
+        margin=dict(l=20,r=20,t=20,b=20), 
+        plot_bgcolor='rgba(0,0,0,0)', 
+        legend=dict(orientation="h", y=1.1)
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 def display_results(results, y_test, y_pred):
+    """Menampilkan hasil analisis di Streamlit."""
     st.markdown("---")
     st.markdown("### 📊 Model Performance")
+    
+    # Metrics Utama
     col1, col2, col3, col4 = st.columns(4)
     report = results["classification_report"]
     
@@ -191,62 +100,137 @@ def display_results(results, y_test, y_pred):
         st.markdown("#### 📈 Class Performance")
         plot_class_metrics_elegant(report)
     
-    # Feature importance
+    # Feature Importance
     if "top_features" in results:
         st.markdown("---")
         st.markdown("### 🔍 Top Influential Features")
+        st.caption("Kata-kata yang paling mempengaruhi keputusan model.")
         col_pos, col_neg = st.columns(2)
         
         with col_pos:
-            st.markdown("**Positive Indicators:**")
+            st.success("**Positive Indicators (Cenderung Positif):**")
             pos_df = pd.DataFrame(results["top_features"]["positive"], columns=["Feature", "Weight"])
             st.dataframe(pos_df.style.format({"Weight": "{:.3f}"}), use_container_width=True)
         
         with col_neg:
-            st.markdown("**Negative Indicators:**")
+            st.error("**Negative Indicators (Cenderung Negatif):**")
             neg_df = pd.DataFrame(results["top_features"]["negative"], columns=["Feature", "Weight"])
             st.dataframe(neg_df.style.format({"Weight": "{:.3f}"}), use_container_width=True)
     
-    with st.expander("📋 Detailed Classification Report"):
+    with st.expander("📋 Lihat Detailed Classification Report"):
         st.dataframe(pd.DataFrame(report).transpose().round(3), use_container_width=True)
 
-def plot_confusion_matrix_elegant(cm):
-    labels = ['Negative', 'Positive']
-    cm_p = cm.astype('float') / cm.sum(axis=1)[:, None] * 100 if cm.sum() > 0 else cm
-    cm_p = np.nan_to_num(cm_p)
-    text = [[f"{cm[i][j]}<br>({cm_p[i][j]:.1f}%)" for j in range(len(cm[i]))] for i in range(len(cm))]
-    
-    fig = go.Figure(data=go.Heatmap(
-        z=cm, x=labels, y=labels, text=text,
-        texttemplate="%{text}", textfont={"size": 14, "color": "white"},
-        colorscale=[[0, '#3D5A80'], [0.5, '#98C1D9'], [1, '#EE6C4D']], showscale=False
-    ))
-    fig.update_layout(height=300, margin=dict(l=20,r=20,t=20,b=20), plot_bgcolor='rgba(0,0,0,0)')
-    st.plotly_chart(fig, use_container_width=True)
+# ==========================================
+# 2. MAIN LOGIC FUNCTION
+# ==========================================
 
-def plot_class_metrics_elegant(report):
-    classes = [c for c in ['negative', 'positive'] if c in report]
-    metrics = ['precision', 'recall', 'f1-score']
-    data = []
-    for metric in metrics:
-        vals = [report[cls][metric] for cls in classes]
-        data.append(go.Bar(
-            name=metric.capitalize(), 
-            x=[c.capitalize() for c in classes], 
-            y=vals, 
-            text=[f'{v:.2%}' for v in vals], 
-            textposition='auto'
-        ))
+def run(input_path, output_dir):
+    if not os.path.exists(input_path):
+        raise FileNotFoundError("File input tidak ditemukan")
     
-    fig = go.Figure(data=data)
-    fig.update_layout(
-        barmode='group', 
-        height=300, 
-        margin=dict(l=20,r=20,t=20,b=20), 
-        plot_bgcolor='rgba(0,0,0,0)', 
-        legend=dict(orientation="h", y=1.1)
+    # 1. Load Data
+    df = pd.read_excel(input_path)
+    
+    # 2. Setup Kolom
+    required_cols = {"opinion_context", "label_text"}
+    if not required_cols.issubset(df.columns):
+        if "processed_opinion" in df.columns:
+            st.warning("⚠️ Menggunakan 'processed_opinion' karena 'opinion_context' tidak ada.")
+            df["feature_text"] = df["processed_opinion"]
+        else:
+            raise ValueError("Kolom opinion_context tidak ditemukan!")
+    else:
+        df["feature_text"] = df["opinion_context"]
+    
+    # 3. Cleaning Dasar
+    df = df.dropna(subset=["feature_text", "label_text"])
+    df["label_text"] = df["label_text"].str.lower().str.strip()
+    df["feature_text"] = df["feature_text"].astype(str).str.strip()
+    
+    # Filter hanya 2 kelas
+    df = df[df["label_text"].isin(["positive", "negative"])]
+    df = df[df["feature_text"] != ""]
+    
+    if df.empty:
+        return create_dummy_result()
+    
+    # Cek Distribusi
+    class_counts = df["label_text"].value_counts()
+    st.info(f"📊 Original Class Distribution: {dict(class_counts)}")
+    
+    if len(class_counts) < 2:
+        st.warning("⚠️ Data hanya memiliki 1 jenis label. Training dibatalkan.")
+        return create_dummy_result(accuracy=1.0)
+    
+    # 4. Split Data (Stratified)
+    # Penting: Split dilakukan SEBELUM Vectorizer untuk mencegah data leakage
+    X = df["feature_text"]
+    y = df["label_text"]
+    
+    try:
+        X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+    except ValueError:
+        # Fallback jika stratify gagal (misal data terlalu sedikit)
+        X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+
+    # 5. TF-IDF Vectorization (Optimized)
+    tfidf = TfidfVectorizer(
+        ngram_range=(1, 2),    # Unigram dan Bigram
+        max_df=0.85,           # Abaikan kata yang muncul di >85% dokumen
+        min_df=2,              # Abaikan kata yang muncul <2 kali (typo/unik)
+        max_features=5000,     # Batasi fitur agar tidak terlalu noise
+        sublinear_tf=True,     # Scaling logaritmik
+        analyzer='word'
     )
-    colors = ['#3D5A80', '#98C1D9', '#EE6C4D']
-    for i, trace in enumerate(fig.data):
-        trace.marker.color = colors[i]
-    st.plotly_chart(fig, use_container_width=True)
+    
+    # Fit hanya pada TRAIN, Transform pada TEST
+    X_train = tfidf.fit_transform(X_train_raw)
+    X_test = tfidf.transform(X_test_raw)
+    
+    # 6. Model Training (Single Balancing Strategy)
+    # Kita menggunakan class_weight='balanced' tanpa oversampling manual
+    model = LogisticRegression(
+        max_iter=1000,
+        class_weight="balanced",  # Penyeimbangan otomatis
+        solver="lbfgs",
+        C=0.8,                    # Regularization (sedikit dikurangi dari 1.0)
+        random_state=42,
+        n_jobs=-1
+    )
+    
+    try:
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        
+        # 7. Compile Results
+        results = {
+            "accuracy": accuracy_score(y_test, y_pred),
+            "classification_report": classification_report(
+                y_test, y_pred, output_dict=True, zero_division=0
+            ),
+            "confusion_matrix": confusion_matrix(y_test, y_pred, labels=["negative", "positive"])
+        }
+        
+        # Feature Importance
+        feature_names = tfidf.get_feature_names_out()
+        coefficients = model.coef_[0]
+        
+        top_positive = sorted(zip(feature_names, coefficients), key=lambda x: x[1], reverse=True)[:10]
+        top_negative = sorted(zip(feature_names, coefficients), key=lambda x: x[1])[:10]
+        
+        results["top_features"] = {
+            "positive": top_positive,
+            "negative": top_negative
+        }
+        
+    except Exception as e:
+        st.error(f"❌ Gagal melatih model: {str(e)}")
+        return create_dummy_result()
+    
+    # 8. Tampilkan Output
+    display_results(results, y_test, y_pred)
+    return results

@@ -973,7 +973,7 @@ needs hug	negative	!isImmediatelyPrecededByANegation	12:10
 needs hugs	negative	!isImmediatelyPrecededByANegation	12:10
 neglect	negative	!isImmediatelyPrecededByANegation	12:10
 neglected	negative	!isImmediatelyPrecededByANegation	12:10
-never	negative	!isFollowedBySpecificTerm///get tired+++isAllCaps	if(A && B){12} else {10}
+never	positive	!isFollowedBySpecificTerm///get tired+++isAllCaps	if(A && B){12} else {10}
 never again	negative		12
 never buy	negative		12
 nigga	negative	!isFollowedByAPositiveOpinion+++!isPrecededByPositive	if (A && B) {12} else {10}

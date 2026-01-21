@@ -36,60 +36,32 @@ def run(input_path, output_dir):
     
     # Check class distribution
     class_counts = df["label_text"].value_counts()
-    st.info(f"📊 Class Distribution BEFORE balancing: {dict(class_counts)}")
+    st.info(f"📊 Original Class Distribution: {dict(class_counts)}")
     
     unique_labels = df["label_text"].unique()
     if len(unique_labels) < 2:
         st.warning(f"⚠️ Data hanya 1 kelas: {unique_labels}.")
         return create_dummy_result(accuracy=1.0)
     
-    # ✅ PERBAIKAN 1: Manual Oversampling (tanpa imbalanced-learn)
-    minority_class = class_counts.idxmin()
-    majority_class = class_counts.idxmax()
-    minority_count = class_counts[minority_class]
-    majority_count = class_counts[majority_class]
-    imbalance_ratio = majority_count / minority_count
-    
-    if imbalance_ratio > 2.0 and minority_count >= 5:
-        st.info(f"🔄 Applying Manual Oversampling (ratio: {imbalance_ratio:.1f}:1)")
-        
-        # Separate classes
-        df_majority = df[df["label_text"] == majority_class]
-        df_minority = df[df["label_text"] == minority_class]
-        
-        # Oversample minority class
-        df_minority_upsampled = resample(
-            df_minority,
-            replace=True,
-            n_samples=majority_count,
-            random_state=42
-        )
-        
-        # Combine back
-        df = pd.concat([df_majority, df_minority_upsampled])
-        df = df.sample(frac=1, random_state=42).reset_index(drop=True)  # Shuffle
-        
-        st.success(f"✅ Balanced classes: {dict(df['label_text'].value_counts())}")
-    
     # Feature extraction
     X = df["feature_text"].astype(str)
     y = df["label_text"]
     
-    # ✅ PERBAIKAN 2: TF-IDF tanpa stop words (keep negations!)
+    # ✅ TF-IDF Configuration
     n_samples = len(X)
     use_min_df = 1 if n_samples < 20 else 2
     
     tfidf = TfidfVectorizer(
-        ngram_range=(1, 3),
-        max_df=0.95,
+        ngram_range=(1, 2),  # Kembali ke 1-2 (lebih stabil)
+        max_df=0.9,  # Turunkan dari 0.95
         min_df=use_min_df,
         sublinear_tf=True,
         analyzer='word',
-        stop_words=None  # Keep "not", "no", etc.
+        stop_words=None
     )
     X_tfidf = tfidf.fit_transform(X)
     
-    # Train-test split
+    # ✅ PERBAIKAN UTAMA: Split DULU, baru balancing
     if n_samples < 5:
         X_train, X_test, y_train, y_test = X_tfidf, X_tfidf, y, y
         st.warning("⚠️ Dataset terlalu kecil, tidak ada train-test split.")
@@ -103,13 +75,49 @@ def run(input_path, output_dir):
             X_train, X_test, y_train, y_test = train_test_split(
                 X_tfidf, y, test_size=0.2, random_state=42
             )
+        
+        # ✅ Apply balancing HANYA pada training set
+        train_counts = pd.Series(y_train).value_counts()
+        minority_class = train_counts.idxmin()
+        majority_class = train_counts.idxmax()
+        minority_count = train_counts[minority_class]
+        majority_count = train_counts[majority_class]
+        imbalance_ratio = majority_count / minority_count
+        
+        if imbalance_ratio > 2.5 and minority_count >= 10:  # Threshold lebih ketat
+            st.info(f"🔄 Balancing training set (ratio: {imbalance_ratio:.1f}:1)")
+            
+            # Convert sparse matrix to indices
+            train_indices = np.arange(len(y_train))
+            minority_indices = train_indices[y_train == minority_class]
+            majority_indices = train_indices[y_train == majority_class]
+            
+            # Oversample minority to 70% of majority (not 100%)
+            target_minority_count = int(majority_count * 0.7)
+            
+            minority_upsampled_idx = resample(
+                minority_indices,
+                replace=True,
+                n_samples=target_minority_count,
+                random_state=42
+            )
+            
+            # Combine indices
+            balanced_indices = np.concatenate([majority_indices, minority_upsampled_idx])
+            np.random.shuffle(balanced_indices)
+            
+            # Apply to training data
+            X_train = X_train[balanced_indices]
+            y_train = y_train.iloc[balanced_indices].reset_index(drop=True)
+            
+            st.success(f"✅ Training set balanced: {dict(pd.Series(y_train).value_counts())}")
     
-    # ✅ PERBAIKAN 3: Model dengan hyperparameter tuning
+    # ✅ Model with adjusted parameters
     model = LogisticRegression(
-        max_iter=5000,
-        class_weight="balanced",
-        solver="saga",
-        C=0.5,
+        max_iter=3000,
+        class_weight="balanced",  # Tetap pakai balanced weight
+        solver="lbfgs",  # Kembali ke lbfgs (lebih stabil)
+        C=1.0,  # Default regularization
         penalty="l2",
         random_state=42
     )

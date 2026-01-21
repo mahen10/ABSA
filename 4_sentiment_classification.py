@@ -68,6 +68,7 @@ def run(input_path, output_dir):
         ngram_range=(1, 2), # Unigram & Bigram (penting untuk menangkap "not good")
         max_df=use_max_df,
         min_df=use_min_df,
+        stop_words="english"
     )
     X_tfidf = tfidf.fit_transform(X)
     

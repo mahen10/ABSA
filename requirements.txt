@@ -8,6 +8,6 @@ matplotlib
 seaborn
 contractions
 plotly
-
+imbalanced-learn
 langdetect
 requests

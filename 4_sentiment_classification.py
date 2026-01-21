@@ -7,6 +7,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE  # <--- IMPORT PENTING
 
 def run(input_path, output_dir):
     # ============================
@@ -41,45 +42,70 @@ def run(input_path, output_dir):
         return create_dummy_result(accuracy=1.0)
 
     # ============================
-    # 2. TF-IDF (KUNCI PERBAIKAN DISINI)
+    # 2. SPLIT DATA (WAJIB DULUAN)
     # ============================
     X = df["feature_text"].astype(str)
     y = df["label_text"]
-    
-    tfidf = TfidfVectorizer(
-        ngram_range=(1, 3),   # UBAH KE (1,3): Tangkap "not bad at all"
-        max_df=0.90,          # Abaikan kata yang muncul di 90% dokumen
-        min_df=2,             # Abaikan typo unik
-        stop_words=None,      # JANGAN PAKAI "english". "No/Not" itu penting!
-        sublinear_tf=True     # Memuluskan frekuensi kata yang meledak
-    )
-    
-    X_tfidf = tfidf.fit_transform(X)
-    
-    # ============================
-    # 3. Split & Train
-    # ============================
+
+    # Kita split raw text dulu agar Data Test benar-benar murni (tidak bocor)
     try:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_tfidf, y, test_size=0.2, random_state=42, stratify=y
+        X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
         )
     except ValueError:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_tfidf, y, test_size=0.2, random_state=42
+        X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
         )
+
+    # ============================
+    # 3. TF-IDF VECTORIZATION
+    # ============================
+    # Kita pakai settingan yang "bagus" tadi (ngram 1-3, stop_words=None)
+    tfidf = TfidfVectorizer(
+        ngram_range=(1, 3),   
+        max_df=0.90,          
+        min_df=2,             
+        stop_words=None,      
+        sublinear_tf=True     
+    )
     
-    # Model Configuration
+    # Fit pada training raw, transform pada test raw
+    X_train_vec = tfidf.fit_transform(X_train_raw)
+    X_test_vec = tfidf.transform(X_test_raw)
+
+    # ============================
+    # 4. TERAPKAN SMOTE
+    # ============================
+    # Cek jumlah sampel minimal untuk menentukan k_neighbors
+    min_samples = y_train.value_counts().min()
+    k_neighbors = 5 if min_samples > 6 else (min_samples - 1)
+    
+    if k_neighbors > 0:
+        smote = SMOTE(random_state=42, k_neighbors=k_neighbors)
+        try:
+            # Ini akan membuat data sintetis sehingga jumlah Pos & Neg sama
+            X_train_resampled, y_train_resampled = smote.fit_resample(X_train_vec, y_train)
+            st.toast(f"✅ SMOTE Berhasil! Data latih naik dari {X_train_vec.shape[0]} ke {X_train_resampled.shape[0]}")
+        except Exception as e:
+            st.warning(f"⚠️ SMOTE gagal (Data terlalu sedikit): {e}")
+            X_train_resampled, y_train_resampled = X_train_vec, y_train
+    else:
+        X_train_resampled, y_train_resampled = X_train_vec, y_train
+
+    # ============================
+    # 5. MODEL TRAINING
+    # ============================
     model = LogisticRegression(
         max_iter=3000,
-        class_weight="balanced", # Tetap pakai balanced agar recall seimbang
+        class_weight=None,       # <--- PENTING: Ubah ke None karena data sudah balanced via SMOTE
         solver="lbfgs",
-        C=2.0,                   # Naikkan C sedikit (Model lebih percaya pada kata-kata spesifik)
+        C=2.0,                   
         random_state=42
     )
     
     try:
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+        model.fit(X_train_resampled, y_train_resampled)
+        y_pred = model.predict(X_test_vec)
         
         results = {
             "accuracy": accuracy_score(y_test, y_pred),
@@ -89,18 +115,17 @@ def run(input_path, output_dir):
             "confusion_matrix": confusion_matrix(y_test, y_pred, labels=["negative", "positive"])
         }
 
-        # Analisis Fitur (Cek kata apa yang bikin error)
+        # Analisis Fitur
         feature_names = tfidf.get_feature_names_out()
         coefs = model.coef_[0]
         
-        # Ambil Top 10 Positive & Negative words
         top_pos = sorted(zip(feature_names, coefs), key=lambda x: x[1], reverse=True)[:10]
         top_neg = sorted(zip(feature_names, coefs), key=lambda x: x[1])[:10]
         
         results["top_features"] = {"positive": top_pos, "negative": top_neg}
 
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(f"Error Training: {str(e)}")
         return create_dummy_result()
     
     display_results(results, y_test, y_pred)
@@ -120,7 +145,7 @@ def create_dummy_result(accuracy=0.0):
 
 def display_results(results, y_test, y_pred):
     st.markdown("---")
-    st.markdown("### 📊 Model Performance (Improved)")
+    st.markdown("### 📊 Model Performance (SMOTE Version)")
     col1, col2, col3, col4 = st.columns(4)
     report = results["classification_report"]
     
@@ -151,7 +176,7 @@ def display_results(results, y_test, y_pred):
             st.write(", ".join([f"{w} ({c:.2f})" for w, c in results["top_features"]["negative"]]))
 
 def plot_confusion_matrix_elegant(cm):
-    labels = ['Negative', 'Positive'] # Pastikan urutan label sesuai model
+    labels = ['Negative', 'Positive']
     cm_sum = cm.sum(axis=1)[:, None]
     cm_p = np.divide(cm.astype('float'), cm_sum, out=np.zeros_like(cm.astype('float')), where=cm_sum!=0) * 100
     

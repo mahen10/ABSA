@@ -127,7 +127,7 @@ def run(input_path, output_dir):
         ngram_range=(1, 3),   
         max_df=0.90,
         min_df=2,
-        stop_words="english"      # <--- KUNCI AKURASI TINGGI
+        stop_words="english",      # <--- KUNCI AKURASI TINGGI
         sublinear_tf=True
     )
     

@@ -62,7 +62,7 @@ def plot_class_metrics_elegant(report):
 
 def display_results(results, y_test, y_pred):
     st.markdown("---")
-    st.markdown("### 📊 Model Performance (Split 70:30)")
+    st.markdown("### 📊 Model Performance")
     
     col1, col2, col3, col4 = st.columns(4)
     report = results["classification_report"]

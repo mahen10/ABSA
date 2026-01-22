@@ -113,47 +113,64 @@ def run(input_path, output_dir):
     df = df[df["label_text"].isin(["positive", "negative"])]
     df = df[df["feature_text"].astype(str).str.strip() != ""]
     
-    if len(df["label_text"].unique()) < 2:
-        return create_dummy_result(accuracy=1.0)
+    # --- CEK JUMLAH DATA SETELAH FILTER ---
+    n_samples = len(df)
+    if n_samples < 2:
+        st.warning("⚠️ Data terlalu sedikit (< 2 baris) setelah filtering. Tidak bisa training.")
+        return create_dummy_result(accuracy=0.0)
 
     # Feature Extraction (TF-IDF)
     X = df["feature_text"].astype(str)
     y = df["label_text"]
     
-    # PERBAIKAN PENTING:
-    # 1. stop_words=None (JANGAN "english", nanti kata "not" hilang!)
-    # 2. ngram_range=(1, 3) (Agar "not good" terbaca satu paket)
+    # --- PERBAIKAN DINAMIS (ANTI CRASH) ---
+    # Jika data < 5 baris, paksa min_df=1 dan max_df=1.0 agar tidak error
+    use_min_df = 2 if n_samples >= 5 else 1
+    use_max_df = 0.90 if n_samples >= 5 else 1.0
+
     tfidf = TfidfVectorizer(
         ngram_range=(1, 3),   
-        max_df=0.90,
-        min_df=2,
-        stop_words="english",      # <--- KUNCI AKURASI TINGGI
+        max_df=use_max_df,     # <-- Pakai variabel dinamis
+        min_df=use_min_df,     # <-- Pakai variabel dinamis
+        stop_words="english",  
         sublinear_tf=True
     )
     
-    X_tfidf = tfidf.fit_transform(X)
-    
-    # Split Data (70:30)
     try:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_tfidf, y, 
-            test_size=0.3,    # <--- UBAH KE 0.3 (30% Testing)
-            random_state=42, 
-            stratify=y
-        )
-    except ValueError:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_tfidf, y, 
-            test_size=0.3,    # <--- UBAH KE 0.3
-            random_state=42
-        )
+        X_tfidf = tfidf.fit_transform(X)
+    except ValueError as e:
+        # Fallback terakhir jika masih error
+        st.warning(f"⚠️ TF-IDF Error: {e}. Mencoba mode fallback...")
+        tfidf = TfidfVectorizer(min_df=1, max_df=1.0)
+        X_tfidf = tfidf.fit_transform(X)
+
+    # Split Data (70:30)
+    # Jika data terlalu sedikit (<5), jangan split, pakai data training untuk test (hanya untuk mencegah crash)
+    if n_samples < 5:
+        X_train, X_test, y_train, y_test = X_tfidf, X_tfidf, y, y
+        st.info("ℹ️ Data sangat sedikit, melewati Train-Test Split.")
+    else:
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_tfidf, y, 
+                test_size=0.3, 
+                random_state=42, 
+                stratify=y
+            )
+        except ValueError:
+            # Fallback jika stratify gagal (misal cuma ada 1 kelas di salah satu split)
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_tfidf, y, 
+                test_size=0.3, 
+                random_state=42
+            )
     
     # Model Training
     model = LogisticRegression(
         max_iter=3000,
-        class_weight="balanced", # Tetap balanced
+        class_weight="balanced", 
         solver="lbfgs",
-        C=2.0,                   # Perketat C sedikit
+        C=2.0,                   
         random_state=42,
         n_jobs=-1
     )

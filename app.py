@@ -330,21 +330,39 @@ if st.session_state['do_analysis']:
             st.table(cm_df)
         
         st.markdown("---")
+# =====================================================
+        # BAGIAN: ANALISIS DETAIL PER ASPEK (DENGAN LABEL ANGKA)
+        # =====================================================
         st.subheader("🧩 Analisis Detail Per Aspek")
         
         aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
         
         if not aspect_sentiment.empty:
+            # Pastikan kolom ada
             if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
             if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
             
-            fig2, ax2 = plt.subplots(figsize=(10, 4))
+            # Buat Plot
+            fig2, ax2 = plt.subplots(figsize=(10, 5)) # Tinggi sedikit ditambah biar lega
             aspect_sentiment[['positive', 'negative']].plot(
                 kind='bar', ax=ax2, color=['#4CAF50', '#F44336'], width=0.7
             )
+
+            # --- KODE TAMBAHAN: MENAMPILKAN ANGKA DI ATAS BAR ---
+            for container in ax2.containers:
+                ax2.bar_label(container, fmt='%d', padding=3, fontsize=10)
+            
+            # Tambahkan ruang kosong di atas chart supaya angka tidak kepotong
+            y_max = aspect_sentiment.values.max()
+            ax2.set_ylim(0, y_max * 1.2) # Tambah 20% ruang di atas
+            # ----------------------------------------------------
+
             ax2.set_ylabel("Jumlah")
             ax2.set_xlabel("Aspek")
+            ax2.legend(title="Sentimen") # Tambahkan legend biar jelas
             plt.xticks(rotation=45, ha='right')
+            plt.tight_layout() # Merapikan layout otomatis
+            
             st.pyplot(fig2)
         else:
             st.info("Belum cukup data aspek.")
@@ -360,4 +378,5 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 

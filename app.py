@@ -348,6 +348,32 @@ if st.session_state['do_analysis']:
                 kind='bar', ax=ax2, color=['#4CAF50', '#F44336'], width=0.7
             )
 
+            # ========================================================
+                # 👇 BAGIAN INI YANG DITAMBAHKAN (Agar muncul angka) 👇
+                # ========================================================
+                
+                # 1. Menuliskan angka di atas setiap batang
+                for container in ax.containers:
+                    ax.bar_label(container, fmt='%d', padding=3, fontsize=10)
+                
+                # 2. Meninggikan batas atas grafik (biar angkanya tidak kepotong)
+                y_max = aspect_sentiment.values.max()
+                ax.set_ylim(0, y_max * 1.2) 
+                
+                # ========================================================
+                # ☝️ SELESAI BAGIAN TAMBAHAN ☝️
+                # ========================================================
+
+                ax.set_ylabel("Jumlah Ulasan")
+                ax.set_xlabel("Aspek Game")
+                ax.legend(["Positif", "Negatif"])
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()
+                
+                st.pyplot(fig)
+            else:
+                st.warning("Data aspek kosong.")
+
             # --- KODE TAMBAHAN: MENAMPILKAN ANGKA DI ATAS BAR ---
             for container in ax2.containers:
                 ax2.bar_label(container, fmt='%d', padding=3, fontsize=10)
@@ -378,5 +404,6 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 
 

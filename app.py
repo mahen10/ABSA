@@ -342,13 +342,13 @@ if st.session_state['do_analysis']:
             if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
             if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
             
-            # Buat Plot
-            fig2, ax2 = plt.subplots(figsize=(10, 5)) # Tinggi sedikit ditambah biar lega
-            aspect_sentiment[['positive', 'negative']].plot(
-                kind='bar', ax=ax2, color=['#4CAF50', '#F44336'], width=0.7
-            )
-
-            # ========================================================
+            # Plotting Chart
+                fig, ax = plt.subplots(figsize=(10, 5))
+                aspect_sentiment[['positive', 'negative']].plot(
+                    kind='bar', ax=ax, color=['#4CAF50', '#F44336'], width=0.7
+                )
+                
+                # ========================================================
                 # 👇 BAGIAN INI YANG DITAMBAHKAN (Agar muncul angka) 👇
                 # ========================================================
                 
@@ -404,6 +404,7 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 
 
 

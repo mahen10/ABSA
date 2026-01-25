@@ -1,6 +1,6 @@
 # =====================================================
 # FILE: 2_absa_extraction.py
-# FIXED: Use Original Text (No Stemming) + Column Name Fix
+# FIXED: Preserve 'appid' and ID columns for filtering
 # =====================================================
 import pandas as pd
 import os
@@ -34,7 +34,7 @@ def ensure_nltk():
 ensure_nltk()
 
 # =====================================================
-# CONSTANTS
+# CONSTANTS & DICTIONARIES
 # =====================================================
 STOPWORDS = set(stopwords.words("english"))
 
@@ -44,26 +44,22 @@ ASPECT_KEYWORDS = {
         "art", "artstyle", "resolution", "texture", "animation", 
         "lighting", "shadow", "design", "scenery", "environment"
     ],
-
     "gameplay": [
         "gameplay", "control", "controls", "mechanic", "mechanics",
         "combat", "movement", "system", "feature", "features",
         "action", "battle", "attack", "defend", "quest", "quests",
         "level", "enemy", "boss", "difficulty"
     ],
-
     "story": [
         "story", "plot", "narrative", "lore", "writing", "dialogue",
         "ending", "cutscene", "mission", "twist", "script",
         "character", "development", "storyline", "arc", "pacing"
     ],
-
     "performance": [
         "performance", "fps", "frame", "rate", "optimization", 
         "memory", "rendering", "loading", "server", "connection",
         "ping", "latency", "bug", "glitch", "crash", "freeze" 
     ],
-
     "music": [
         "music", "sound", "audio", "sfx", "voice", "acting",
         "soundtrack", "ost", "bgm", "volume", "melody", "song",
@@ -121,7 +117,6 @@ def extract_aspect_opinion(text):
         tagged = pos_tag(tokens)
         
         # Cari kata sifat (JJ), Verb (VB), Adverb (RB)
-        # Karena teks asli, NLTK akan lebih akurat mendeteksi Adjective (misal: "addictive" vs "addict")
         potential_opinions = []
         for w, t in tagged:
             if (t.startswith("JJ") or t.startswith("VB") or t.startswith("RB")) and valid_word(w):
@@ -156,7 +151,7 @@ def extract_aspect_opinion(text):
     return results
 
 # =====================================================
-# PIPELINE ENTRY POINT
+# PIPELINE ENTRY POINT (DENGAN ID PRESERVATION)
 # =====================================================
 def run(input_path, output_path):
     print(f"Processing: {input_path}")
@@ -169,22 +164,22 @@ def run(input_path, output_path):
 
     rows = []
     
-    # === PERBAIKAN LOGIKA SUMBER DATA ===
-    # Kita prioritaskan kolom 'review' (teks asli) daripada 'cleaned_review'.
-    # Kenapa? Karena 'cleaned_review' dari Step 1 mungkin sudah kena Stemming (addictive -> addict).
-    # Kita ingin hasil ekstraksi tetap utuh ("addictive").
-    
-    source_col = "review" # Default ke review asli
+    # 1. Tentukan kolom teks sumber
+    source_col = "review" # Default
     if "review" not in df.columns:
-        # Fallback jika tidak ada kolom review (misal nama kolomnya 'content' atau 'text')
-        # Coba cari kolom lain yang mungkin berisi teks asli
         alternatives = ["content", "text", "body", "ulasan", "cleaned_review"]
         for alt in alternatives:
             if alt in df.columns:
                 source_col = alt
                 break
     
-    print(f"Using column '{source_col}' for aspect extraction (to keep words natural).")
+    # 2. IDENTIFIKASI KOLOM ID YANG PERLU DISIMPAN
+    # Kita cari kolom yang mengandung kata kunci ID agar tidak hilang
+    # Ini penting agar filter game ID di Dashboard berfungsi
+    preserve_cols = [col for col in df.columns if any(x in col.lower() for x in ['appid', 'app_id', 'game_id', 'steam_id', 'author', 'timestamp', 'voted'])]
+    
+    print(f"Using column '{source_col}' for extraction.")
+    print(f"Preserving Metadata Columns: {preserve_cols}")
 
     for _, r in df.iterrows():
         # Ambil teks
@@ -198,22 +193,32 @@ def run(input_path, output_path):
         matches = extract_aspect_opinion(text)
         
         for m in matches:
-            rows.append({
+            # Buat data dasar hasil ekstraksi
+            row_data = {
                 "original_review": r.get("review", text),
-                "opinion_word": m["opinion_word"],   # Hasil: "smooth, addictive" (utuh)
-                "processed_opinion": m["opinion_word"], # Backup untuk Step 5
+                "opinion_word": m["opinion_word"],   
+                "processed_opinion": m["opinion_word"], 
                 "aspect": m["aspect"],
                 "opinion_context": m["opinion_context"]
-            })
+            }
+            
+            # --- BAGIAN PENTING: Menambahkan kolom ID/Metadata ---
+            for col in preserve_cols:
+                row_data[col] = r[col]
+            # -----------------------------------------------------
+
+            rows.append(row_data)
             
     if not rows:
         print("Warning: No aspects extracted!")
-        out_df = pd.DataFrame(columns=["original_review", "opinion_word", "processed_opinion", "aspect", "opinion_context"])
+        # Pastikan struktur DataFrame tetap ada meski kosong
+        base_cols = ["original_review", "opinion_word", "processed_opinion", "aspect", "opinion_context"]
+        out_df = pd.DataFrame(columns=base_cols + preserve_cols)
     else:
         out_df = pd.DataFrame(rows)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     out_df.to_excel(output_path, index=False)
-    print(f"Extracted {len(out_df)} aspect-opinion pairs.")
+    print(f"Extracted {len(out_df)} aspect-opinion pairs. Saved to {output_path}")
     
     return out_df

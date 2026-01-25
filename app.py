@@ -9,6 +9,7 @@ import sys
 import traceback
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 # =====================================================
 # CONFIG & STYLE
@@ -390,34 +391,62 @@ if st.session_state['analysis_done'] and st.session_state['df_result'] is not No
     
     st.markdown("---")
 
+    # =====================================================
+    # GRAFIK SENTIMEN & CONFUSION MATRIX
+    # =====================================================
     c_left, c_right = st.columns([1, 1])
 
     with c_left:
         st.subheader("📊 Distribusi Sentimen")
-        fig1, ax1 = plt.subplots(figsize=(6, 3))
+        fig1, ax1 = plt.subplots(figsize=(6, 4))
         counts = df_active["label_text"].value_counts()
         
         if not counts.empty:
             colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
             counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
             ax1.set_xlabel("Jumlah")
-            st.pyplot(fig1, use_container_width=False)
+            ax1.set_ylabel("Sentimen")
+            plt.tight_layout()
+            st.pyplot(fig1, use_container_width=True)
         else:
             st.write("Tidak ada data.")
 
     with c_right:
         st.subheader("🤖 Evaluasi Model")
+        
+        # Tampilkan akurasi
         if acc_score == 0:
             st.info("Data < 5 (Akurasi N/A)")
         else:
             st.write(f"**Akurasi Dataset (Test Split): {acc_score:.2f}%**")
         
-        cm_df = pd.DataFrame(
-            result["confusion_matrix"],
-            index=["Aktual Neg", "Aktual Pos"],
-            columns=["Prediksi Neg", "Prediksi Pos"]
-        )
-        st.table(cm_df)
+        # Tampilkan confusion matrix
+        if 'confusion_matrix' in result and result['confusion_matrix'] is not None:
+            cm = result["confusion_matrix"]
+            
+            # Tabel confusion matrix
+            cm_df = pd.DataFrame(
+                cm,
+                index=["Aktual Neg", "Aktual Pos"],
+                columns=["Prediksi Neg", "Prediksi Pos"]
+            )
+            
+            with st.expander("📋 Tabel Confusion Matrix"):
+                st.table(cm_df)
+            
+            # Heatmap confusion matrix
+            fig_cm, ax_cm = plt.subplots(figsize=(5, 4))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                       xticklabels=['Negative', 'Positive'],
+                       yticklabels=['Negative', 'Positive'],
+                       cbar=False, ax=ax_cm)
+            ax_cm.set_xlabel('Prediksi')
+            ax_cm.set_ylabel('Aktual')
+            ax_cm.set_title('Confusion Matrix')
+            plt.tight_layout()
+            st.pyplot(fig_cm, use_container_width=True)
+        else:
+            st.info("Confusion matrix tidak tersedia (data terlalu sedikit)")
     
     st.markdown("---")
     
@@ -452,6 +481,21 @@ if st.session_state['analysis_done'] and st.session_state['df_result'] is not No
         st.pyplot(fig2)
     else:
         st.info("Belum cukup data aspek.")
+    
+    st.markdown("---")
+    
+    # =====================================================
+    # CLASSIFICATION REPORT (JIKA ADA)
+    # =====================================================
+    if 'classification_report' in result and result['classification_report']:
+        st.subheader("📋 Classification Report")
+        
+        with st.expander("Lihat Detail Metrik"):
+            report_dict = result['classification_report']
+            
+            # Convert to DataFrame
+            report_df = pd.DataFrame(report_dict).transpose()
+            st.dataframe(report_df.style.format("{:.2f}"), use_container_width=True)
     
     st.markdown("---")
     

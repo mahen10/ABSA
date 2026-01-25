@@ -271,10 +271,6 @@ if st.session_state['do_analysis']:
         st.session_state['result_file'] = out4
         st.session_state['model_result'] = result
 
-    except Exception:
-        st.error("❌ Terjadi error sistem")
-        st.code(traceback.format_exc())
-
 # =====================================================
 # VISUALISASI DATA (TERPISAH DARI PROCESSING)
 # =====================================================

@@ -248,10 +248,8 @@ if st.session_state['do_analysis']:
         status_text.success("✅ Analisis Selesai!")
 
         # =====================================================
-        # BAGIAN: PREVIEW TABEL DATA
+        # BAGIAN: VISUALISASI DATA DENGAN MULTI-GAME FILTER
         # =====================================================
-        st.markdown("### 🔍 Deteksi Aspek & Sentimen")
-        
         if os.path.exists(out4):
             df_final = pd.read_excel(out4)
             
@@ -262,111 +260,164 @@ if st.session_state['do_analysis']:
             
             df_final["label_text"] = df_final["label_text"].str.lower().str.strip()
             
+            # =====================================================
+            # FITUR FILTER GAME ID (Multigame Support)
+            # =====================================================
+            game_id_col = None
+            possible_cols = ['appid', 'app_id', 'game_id', 'steam_appid']
+            for c in possible_cols:
+                if c in df_final.columns:
+                    game_id_col = c
+                    break
+            
+            # Default: Semua Data
+            df_active = df_final.copy()
+            selected_game_label = "Semua Game"
+            
+            # Jika ada lebih dari 1 game, munculkan filter
+            if game_id_col and len(df_final[game_id_col].unique()) > 1:
+                st.markdown("### 🎯 Filter Analisis Multi-Game")
+                
+                col_filter, col_info = st.columns([1, 2])
+                
+                with col_filter:
+                    unique_games = sorted([str(x) for x in df_final[game_id_col].unique()])
+                    game_options = ["🌐 Gabungan (Semua Game)"] + [f"🎮 Game ID: {gid}" for gid in unique_games]
+                    
+                    selected_option = st.selectbox(
+                        "Pilih Game untuk Dianalisis:",
+                        game_options,
+                        key="game_filter"
+                    )
+                    
+                    if selected_option != "🌐 Gabungan (Semua Game)":
+                        # Extract game ID dari pilihan
+                        selected_game_id = selected_option.split(": ")[1]
+                        df_active = df_final[df_final[game_id_col].astype(str) == selected_game_id]
+                        selected_game_label = f"Game ID {selected_game_id}"
+                
+                with col_info:
+                    # Tampilkan ringkasan game yang tersedia
+                    game_summary = df_final.groupby(game_id_col).size().reset_index(name='Jumlah Review')
+                    game_summary.columns = ['Game ID', 'Jumlah Review']
+                    
+                    with st.expander("📊 Lihat Ringkasan Semua Game"):
+                        st.dataframe(game_summary, use_container_width=True)
+                
+                st.markdown("---")
+            
+            # =====================================================
+            # PREVIEW TABEL DATA (Berdasarkan Filter)
+            # =====================================================
+            st.markdown(f"### 🔍 Deteksi Aspek & Sentimen - **{selected_game_label}**")
+            
             # --- TAMPILKAN KOLOM PILIHAN ---
             desired_cols = ["original_review", "opinion_context", "aspect", "label_text"]
-            display_cols = [col for col in desired_cols if col in df_final.columns]
+            if game_id_col:
+                desired_cols.insert(0, game_id_col)
+            
+            display_cols = [col for col in desired_cols if col in df_active.columns]
             
             with st.expander("📄 Lihat Data Hasil Analisis"):
-                st.dataframe(df_final[display_cols], use_container_width=True)
-        
-        st.markdown("---")
-
-        # =====================================================
-        # VISUALISASI DASHBOARD
-        # =====================================================
-        st.subheader("📌 Ringkasan Hasil")
-        
-        game_title = st.session_state.get('game_title', None)
-        acc_score = result.get('accuracy', 0) * 100
-        ai_summary = generate_smart_insight(df_final, acc_score, game_title)
-        st.info(ai_summary)
-        
-        pos = (df_final["label_text"] == "positive").sum()
-        neg = (df_final["label_text"] == "negative").sum()
-        total = len(df_final)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Data", total)
-        col2.metric("Positive", pos, delta="Good", delta_color="normal")
-        col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
-
-        with open(out4, "rb") as f:
-            col4.download_button(
-                "⬇ Download Hasil",
-                data=f,
-                file_name="hasil_analisis.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        
-        st.markdown("---")
-
-        c_left, c_right = st.columns([1, 1])
-
-        with c_left:
-            st.subheader("📊 Distribusi Sentimen")
-            fig1, ax1 = plt.subplots(figsize=(6, 3))
-            counts = df_final["label_text"].value_counts()
+                st.dataframe(df_active[display_cols], use_container_width=True)
             
-            if not counts.empty:
-                colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
-                counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
-                ax1.set_xlabel("Jumlah")
-                st.pyplot(fig1, use_container_width=False)
+            st.markdown("---")
+
+            # =====================================================
+            # VISUALISASI DASHBOARD (Berdasarkan Filter)
+            # =====================================================
+            st.subheader(f"📌 Ringkasan Hasil - {selected_game_label}")
+            
+            game_title = st.session_state.get('game_title', None) or selected_game_label
+            acc_score = result.get('accuracy', 0) * 100
+            ai_summary = generate_smart_insight(df_active, acc_score, game_title)
+            st.info(ai_summary)
+            
+            pos = (df_active["label_text"] == "positive").sum()
+            neg = (df_active["label_text"] == "negative").sum()
+            total = len(df_active)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Data", total)
+            col2.metric("Positive", pos, delta="Good", delta_color="normal")
+            col3.metric("Negative", neg, delta="-Bad", delta_color="inverse")
+
+            with open(out4, "rb") as f:
+                col4.download_button(
+                    "⬇ Download Hasil",
+                    data=f,
+                    file_name="hasil_analisis.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            
+            st.markdown("---")
+
+            c_left, c_right = st.columns([1, 1])
+
+            with c_left:
+                st.subheader("📊 Distribusi Sentimen")
+                fig1, ax1 = plt.subplots(figsize=(6, 3))
+                counts = df_active["label_text"].value_counts()
+                
+                if not counts.empty:
+                    colors = ['#4CAF50' if x == 'positive' else '#F44336' for x in counts.index]
+                    counts.plot(kind="barh", ax=ax1, color=colors, width=0.6)
+                    ax1.set_xlabel("Jumlah")
+                    st.pyplot(fig1, use_container_width=False)
+                else:
+                    st.write("Tidak ada data.")
+
+            with c_right:
+                st.subheader("🤖 Evaluasi Model")
+                if acc_score == 0:
+                    st.info("Data < 5 (Akurasi N/A)")
+                else:
+                    st.write(f"**Akurasi Dataset (Test Split): {acc_score:.2f}%**")
+                
+                cm_df = pd.DataFrame(
+                    result["confusion_matrix"],
+                    index=["Aktual Neg", "Aktual Pos"],
+                    columns=["Prediksi Neg", "Prediksi Pos"]
+                )
+                st.table(cm_df)
+            
+            st.markdown("---")
+            
+            # =====================================================
+            # ANALISIS DETAIL PER ASPEK (Berdasarkan Filter)
+            # =====================================================
+            st.subheader(f"🧩 Analisis Detail Per Aspek - {selected_game_label}")
+            
+            aspect_sentiment = df_active.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
+            
+            if not aspect_sentiment.empty:
+                # Pastikan kolom ada
+                if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
+                if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
+                
+                # Buat Plot
+                fig2, ax2 = plt.subplots(figsize=(10, 5))
+                aspect_sentiment[['positive', 'negative']].plot(
+                    kind='bar', ax=ax2, color=['#4CAF50', '#F44336'], width=0.7
+                )
+
+                # Menampilkan angka di atas bar
+                for container in ax2.containers:
+                    ax2.bar_label(container, fmt='%d', padding=3, fontsize=10)
+                
+                # Tambahkan ruang kosong di atas chart
+                y_max = aspect_sentiment.values.max()
+                ax2.set_ylim(0, y_max * 1.2)
+
+                ax2.set_ylabel("Jumlah")
+                ax2.set_xlabel("Aspek")
+                ax2.legend(title="Sentimen")
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()
+                
+                st.pyplot(fig2)
             else:
-                st.write("Tidak ada data.")
-
-        with c_right:
-            st.subheader("🤖 Evaluasi Model")
-            if acc_score == 0:
-                st.info("Data < 5 (Akurasi N/A)")
-            else:
-                st.write(f"**Akurasi Dataset (Test Split): {acc_score:.2f}%**")
-            
-            cm_df = pd.DataFrame(
-                result["confusion_matrix"],
-                index=["Aktual Neg", "Aktual Pos"],
-                columns=["Prediksi Neg", "Prediksi Pos"]
-            )
-            st.table(cm_df)
-        
-        st.markdown("---")
-        
-        # =====================================================
-        # BAGIAN: ANALISIS DETAIL PER ASPEK (DENGAN LABEL ANGKA)
-        # =====================================================
-        st.subheader("🧩 Analisis Detail Per Aspek")
-        
-        aspect_sentiment = df_final.groupby(['aspect', 'label_text']).size().unstack(fill_value=0)
-        
-        if not aspect_sentiment.empty:
-            # Pastikan kolom ada
-            if 'positive' not in aspect_sentiment.columns: aspect_sentiment['positive'] = 0
-            if 'negative' not in aspect_sentiment.columns: aspect_sentiment['negative'] = 0
-            
-            # Buat Plot
-            fig2, ax2 = plt.subplots(figsize=(10, 5)) # Tinggi sedikit ditambah biar lega
-            aspect_sentiment[['positive', 'negative']].plot(
-                kind='bar', ax=ax2, color=['#4CAF50', '#F44336'], width=0.7
-            )
-
-            # --- KODE TAMBAHAN: MENAMPILKAN ANGKA DI ATAS BAR ---
-            for container in ax2.containers:
-                ax2.bar_label(container, fmt='%d', padding=3, fontsize=10)
-            
-            # Tambahkan ruang kosong di atas chart supaya angka tidak kepotong
-            y_max = aspect_sentiment.values.max()
-            ax2.set_ylim(0, y_max * 1.2) # Tambah 20% ruang di atas
-            # ----------------------------------------------------
-
-            ax2.set_ylabel("Jumlah")
-            ax2.set_xlabel("Aspek")
-            ax2.legend(title="Sentimen") # Tambahkan legend biar jelas
-            plt.xticks(rotation=45, ha='right')
-            plt.tight_layout() # Merapikan layout otomatis
-            
-            st.pyplot(fig2)
-        else:
-            st.info("Belum cukup data aspek.")
+                st.info("Belum cukup data aspek.")
 
     except Exception:
         st.error("❌ Terjadi error sistem")

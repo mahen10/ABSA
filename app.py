@@ -414,16 +414,24 @@ if st.session_state['analysis_done'] and st.session_state['df_result'] is not No
     with c_right:
         st.subheader("🤖 Evaluasi Model")
         
+        # Debug: tampilkan isi result untuk diagnostik
+        with st.expander("🔍 Debug - Lihat Isi Result"):
+            st.json(result)
+        
         # Tampilkan akurasi
         if acc_score == 0:
             st.info("Data < 5 (Akurasi N/A)")
         else:
-            st.write(f"**Akurasi Dataset (Test Split): {acc_score:.2f}%**")
+            st.metric("Akurasi Model", f"{acc_score:.2f}%")
         
-        # Tampilkan confusion matrix
-        if 'confusion_matrix' in result and result['confusion_matrix'] is not None:
-            cm = result["confusion_matrix"]
-            
+        # Tampilkan confusion matrix - coba berbagai key yang mungkin
+        cm = None
+        if 'confusion_matrix' in result:
+            cm = result['confusion_matrix']
+        elif 'cm' in result:
+            cm = result['cm']
+        
+        if cm is not None:
             # Tabel confusion matrix
             cm_df = pd.DataFrame(
                 cm,
@@ -431,8 +439,8 @@ if st.session_state['analysis_done'] and st.session_state['df_result'] is not No
                 columns=["Prediksi Neg", "Prediksi Pos"]
             )
             
-            with st.expander("📋 Tabel Confusion Matrix"):
-                st.table(cm_df)
+            st.write("**Confusion Matrix:**")
+            st.table(cm_df)
             
             # Heatmap confusion matrix
             fig_cm, ax_cm = plt.subplots(figsize=(5, 4))
@@ -446,7 +454,7 @@ if st.session_state['analysis_done'] and st.session_state['df_result'] is not No
             plt.tight_layout()
             st.pyplot(fig_cm, use_container_width=True)
         else:
-            st.info("Confusion matrix tidak tersedia (data terlalu sedikit)")
+            st.warning("⚠️ Confusion matrix tidak tersedia dalam hasil model")
     
     st.markdown("---")
     
@@ -485,17 +493,37 @@ if st.session_state['analysis_done'] and st.session_state['df_result'] is not No
     st.markdown("---")
     
     # =====================================================
-    # CLASSIFICATION REPORT (JIKA ADA)
+    # CLASSIFICATION REPORT & METRICS TAMBAHAN
     # =====================================================
+    st.subheader("📊 Metrik Evaluasi Detail")
+    
+    col_metrics1, col_metrics2, col_metrics3 = st.columns(3)
+    
+    # Precision, Recall, F1-Score
     if 'classification_report' in result and result['classification_report']:
-        st.subheader("📋 Classification Report")
+        report = result['classification_report']
         
-        with st.expander("Lihat Detail Metrik"):
-            report_dict = result['classification_report']
-            
-            # Convert to DataFrame
-            report_df = pd.DataFrame(report_dict).transpose()
-            st.dataframe(report_df.style.format("{:.2f}"), use_container_width=True)
+        with col_metrics1:
+            if 'weighted avg' in report:
+                precision = report['weighted avg'].get('precision', 0)
+                st.metric("Precision", f"{precision:.2%}")
+        
+        with col_metrics2:
+            if 'weighted avg' in report:
+                recall = report['weighted avg'].get('recall', 0)
+                st.metric("Recall", f"{recall:.2%}")
+        
+        with col_metrics3:
+            if 'weighted avg' in report:
+                f1 = report['weighted avg'].get('f1-score', 0)
+                st.metric("F1-Score", f"{f1:.2%}")
+        
+        # Tabel detail per kelas
+        with st.expander("📋 Lihat Classification Report Detail"):
+            report_df = pd.DataFrame(report).transpose()
+            st.dataframe(report_df.style.format("{:.3f}"), use_container_width=True)
+    else:
+        st.info("Classification report tidak tersedia")
     
     st.markdown("---")
     

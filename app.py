@@ -59,6 +59,25 @@ step05 = load_module(os.path.join(BASE_DIR, "4_sentiment_classification.py"), "s
 
 
 # =====================================================
+# DATABASE GAME ID -> NAMA GAME
+# =====================================================
+GAME_DATABASE = {
+    269790: "DreadOut",
+    854570: "Pamali: Indonesian Folklore Horror",
+    1201270: "A Space for the Unbound",
+    1337760: "Potion Permit",
+    1356280: "Kitaria Fables"
+}
+
+def get_game_name_from_id(game_id):
+    """Ambil nama game dari ID, fallback ke ID jika tidak ada di database"""
+    try:
+        game_id_int = int(game_id)
+        return GAME_DATABASE.get(game_id_int, f"Game ID {game_id}")
+    except (ValueError, TypeError):
+        return f"Game ID {game_id}"
+
+# =====================================================
 # FITUR: AI INSIGHT GENERATOR (LOGIC BASED)
 # =====================================================
 def generate_smart_insight(df, accuracy, game_name=None):
@@ -282,7 +301,15 @@ if st.session_state['do_analysis']:
                 
                 with col_filter:
                     unique_games = sorted([str(x) for x in df_final[game_id_col].unique()])
-                    game_options = ["🌐 Gabungan (Semua Game)"] + [f"🎮 Game ID: {gid}" for gid in unique_games]
+                    
+                    # Buat dictionary mapping ID -> Label yang cantik
+                    game_options_dict = {"all": "🌐 Gabungan (Semua Game)"}
+                    for gid in unique_games:
+                        game_name = get_game_name_from_id(gid)
+                        game_options_dict[gid] = f"🎮 {game_name}"
+                    
+                    # Opsi untuk selectbox
+                    game_options = list(game_options_dict.values())
                     
                     selected_option = st.selectbox(
                         "Pilih Game untuk Dianalisis:",
@@ -291,15 +318,23 @@ if st.session_state['do_analysis']:
                     )
                     
                     if selected_option != "🌐 Gabungan (Semua Game)":
-                        # Extract game ID dari pilihan
-                        selected_game_id = selected_option.split(": ")[1]
-                        df_active = df_final[df_final[game_id_col].astype(str) == selected_game_id]
-                        selected_game_label = f"Game ID {selected_game_id}"
+                        # Cari game ID dari pilihan
+                        selected_game_id = None
+                        for gid, label in game_options_dict.items():
+                            if label == selected_option:
+                                selected_game_id = gid
+                                break
+                        
+                        if selected_game_id and selected_game_id != "all":
+                            df_active = df_final[df_final[game_id_col].astype(str) == selected_game_id]
+                            selected_game_label = get_game_name_from_id(selected_game_id)
                 
                 with col_info:
-                    # Tampilkan ringkasan game yang tersedia
+                    # Tampilkan ringkasan game yang tersedia dengan nama
                     game_summary = df_final.groupby(game_id_col).size().reset_index(name='Jumlah Review')
-                    game_summary.columns = ['Game ID', 'Jumlah Review']
+                    game_summary['Nama Game'] = game_summary[game_id_col].apply(get_game_name_from_id)
+                    game_summary = game_summary[[game_id_col, 'Nama Game', 'Jumlah Review']]
+                    game_summary.columns = ['Game ID', 'Nama Game', 'Jumlah Review']
                     
                     with st.expander("📊 Lihat Ringkasan Semua Game"):
                         st.dataframe(game_summary, use_container_width=True)

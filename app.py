@@ -402,21 +402,7 @@ if st.session_state['do_analysis']:
                 else:
                     st.write("Tidak ada data.")
 
-            with c_right:
-                st.subheader("🤖 Evaluasi Model")
-                if acc_score == 0:
-                    st.info("Data < 5 (Akurasi N/A)")
-                else:
-                    st.write(f"**Akurasi Dataset (Test Split): {acc_score:.2f}%**")
-                
-                cm_df = pd.DataFrame(
-                    result["confusion_matrix"],
-                    index=["Aktual Neg", "Aktual Pos"],
-                    columns=["Prediksi Neg", "Prediksi Pos"]
-                )
-                st.table(cm_df)
-            
-            st.markdown("---")
+           
             
             # =====================================================
             # ANALISIS DETAIL PER ASPEK (Berdasarkan Filter)
@@ -465,3 +451,4 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+

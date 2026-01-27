@@ -112,13 +112,13 @@ def generate_smart_insight(df, accuracy, game_name=None):
 
     # 3. Rangkai Kalimat
     insight = f"""
-    ### 🤖 AI Copilot Summary
+    ### Hasil Analisis
     {intro} dari total **{total} data**:
     
     1. **Sentimen Dominan:** Mayoritas pengguna memberikan respon **{dominance}** ({percent_dom:.1f}%).
     2. **Kekuatan Utama:** Aspek **{best_aspect.upper()}** paling banyak dipuji (mendapat {best_count} respon positif). Ini adalah fitur unggulan game ini.
     3. **Kelemahan Kritis:** Pengguna paling banyak mengeluh soal **{worst_aspect.upper()}** (mendapat {worst_count} keluhan). Developer disarankan untuk segera memperbaiki sektor ini.
-    4. **Kualitas Model:** Analisis ini didukung oleh model AI dengan tingkat akurasi **{accuracy:.1f}%**.
+    4. **Kualitas Model:** Analisis ini didukung oleh model Logistik Regresion dengan tingkat akurasi **{accuracy:.1f}%**.
     """
     return insight
 
@@ -451,4 +451,5 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 

@@ -89,7 +89,7 @@ def display_results(results, y_test, y_pred):
 # 2. MAIN LOGIC
 # ==========================================
 
-def run(input_path, output_dir):
+def run(input_path, use_balanced=True):
     # Load Data
     if not os.path.exists(input_path):
         raise FileNotFoundError("File input tidak ditemukan")
@@ -165,12 +165,19 @@ def run(input_path, output_dir):
                 random_state=42
             )
     
-    # Model Training
+    if use_balanced:
+        weight_param = "balanced"
+        st.info("⚖️ Mode: Menggunakan Class Weight (Balanced)")
+    else:
+        weight_param = None
+        st.warning("⚠️ Mode: Tanpa Class Weight (Raw)")
+
+    # 3. Masukkan parameter tersebut ke dalam model
     model = LogisticRegression(
         max_iter=3000,
-        class_weight="balanced", 
+        class_weight=weight_param,  # <--- GANTI "balanced" DENGAN VARIABEL INI
         solver="lbfgs",
-        C=2.0,                   
+        C=2.0,                    
         random_state=42,
         n_jobs=-1
     )

@@ -196,6 +196,7 @@ with st.sidebar:
             * 📜 **Story:** story, plot, narrative, lore, writing, dialogue, ending, cutscene, mission, twist, script, character, development, storyline, arc, pacing
             * 🚀 **Performance:** performance, fps, frame, rate, optimization, memory, rendering, loading, server, connection, ping, latency, bug, glitch, crash, freeze
             * 🎵 **Music:** music, sound, audio, sfx, voice, acting, soundtrack, ost, bgm, volume, melody, song, noise, dubbing
+            * note: Gunakan Bahasa Inggris
             """)
         user_text = st.text_area("Masukkan Review Game:", height=150)
         
@@ -465,4 +466,5 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 

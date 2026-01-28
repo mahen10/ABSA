@@ -131,8 +131,8 @@ def run(input_path, output_dir):
     tfidf = TfidfVectorizer(
         ngram_range=(1, 3),   
         max_df=use_max_df,     # <-- Pakai variabel dinamis
-        min_df=use_min_df,
-        stop_words="english",# <-- Pakai variabel dinamis
+        min_df=use_min_df,     # <-- Pakai variabel dinamis
+        stop_words="english",  
         sublinear_tf=True
     )
     
@@ -168,7 +168,7 @@ def run(input_path, output_dir):
     # Model Training
     model = LogisticRegression(
         max_iter=3000,
-        class_weight="balanced",
+        class_weight="balanced", 
         solver="lbfgs",
         C=2.0,                   
         random_state=42,

@@ -1,6 +1,3 @@
-# ==========================================
-# FILE: 4_sentiment_classification.py
-# ==========================================
 import pandas as pd
 import os
 import numpy as np
@@ -92,8 +89,7 @@ def display_results(results, y_test, y_pred):
 # 2. MAIN LOGIC
 # ==========================================
 
-# PERBAIKAN PENTING DI SINI: urutan parameter disesuaikan dengan app.py
-def run(input_path, output_dir, use_balanced=True):
+def run(input_path, output_dir):
     # Load Data
     if not os.path.exists(input_path):
         raise FileNotFoundError("File input tidak ditemukan")
@@ -128,13 +124,14 @@ def run(input_path, output_dir, use_balanced=True):
     y = df["label_text"]
     
     # --- PERBAIKAN DINAMIS (ANTI CRASH) ---
+    # Jika data < 5 baris, paksa min_df=1 dan max_df=1.0 agar tidak error
     use_min_df = 2 if n_samples >= 5 else 1
     use_max_df = 0.90 if n_samples >= 5 else 1.0
 
     tfidf = TfidfVectorizer(
         ngram_range=(1, 3),   
-        max_df=use_max_df,     
-        min_df=use_min_df,     
+        max_df=use_max_df,     # <-- Pakai variabel dinamis
+        min_df=use_min_df,     # <-- Pakai variabel dinamis
         stop_words="english",  
         sublinear_tf=True
     )
@@ -142,11 +139,13 @@ def run(input_path, output_dir, use_balanced=True):
     try:
         X_tfidf = tfidf.fit_transform(X)
     except ValueError as e:
+        # Fallback terakhir jika masih error
         st.warning(f"⚠️ TF-IDF Error: {e}. Mencoba mode fallback...")
         tfidf = TfidfVectorizer(min_df=1, max_df=1.0)
         X_tfidf = tfidf.fit_transform(X)
 
     # Split Data (70:30)
+    # Jika data terlalu sedikit (<5), jangan split, pakai data training untuk test (hanya untuk mencegah crash)
     if n_samples < 5:
         X_train, X_test, y_train, y_test = X_tfidf, X_tfidf, y, y
         st.info("ℹ️ Data sangat sedikit, melewati Train-Test Split.")
@@ -159,26 +158,19 @@ def run(input_path, output_dir, use_balanced=True):
                 stratify=y
             )
         except ValueError:
+            # Fallback jika stratify gagal (misal cuma ada 1 kelas di salah satu split)
             X_train, X_test, y_train, y_test = train_test_split(
                 X_tfidf, y, 
                 test_size=0.3, 
                 random_state=42
             )
     
-    # --- PENGATURAN CLASS WEIGHT ---
-    if use_balanced:
-        weight_param = "balanced"
-        st.info("⚖️ Mode: Menggunakan Class Weight (Balanced)")
-    else:
-        weight_param = None
-        st.warning("⚠️ Mode: Tanpa Class Weight (Raw)")
-
     # Model Training
     model = LogisticRegression(
         max_iter=3000,
-        class_weight=weight_param,  # Menggunakan variabel dari if/else di atas
+        class_weight="balanced", 
         solver="lbfgs",
-        C=2.0,                    
+        C=2.0,                   
         random_state=42,
         n_jobs=-1
     )

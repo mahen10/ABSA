@@ -228,7 +228,13 @@ with st.sidebar:
                     st.error("Gagal mengambil data atau tidak ada ulasan relevan.")
             else:
                 st.warning("App ID harus berupa angka.")
+# --- TAMBAHAN BARU: OPSI CLASS WEIGHT ---
+    use_cw = st.checkbox("⚖️ Pakai Class Weight (Balanced)?", value=True)
+    st.caption("Matikan untuk melihat hasil murni tanpa penyeimbangan data.")
+    st.markdown("---")
+    # ----------------------------------------
 
+    input_mode = st.radio(...)
 # =====================================================
 # MAIN PROCESS LOGIC (JALAN JIKA STATE TRUE)
 # =====================================================
@@ -260,8 +266,13 @@ if st.session_state['do_analysis']:
         status_text.write("⏳ Step 4/5: Pelabelan Otomatis...")
         progress_bar.progress(70); step04.run(out3, out4)
         
+
         status_text.write("⏳ Step 5/5: Klasifikasi & Evaluasi Model...")
-        progress_bar.progress(90); result = step05.run(out4, OUTPUT_DIR)
+        
+        # --- UBAH CARA PANGGIL step05 ---
+        # Kita kirim nilai dari checkbox (use_cw) ke fungsi run
+        progress_bar.progress(90)
+        result = step05.run(out4, OUTPUT_DIR, use_balanced=use_cw) 
 
         progress_bar.progress(100)
         status_text.success("✅ Analisis Selesai!")
@@ -451,5 +462,6 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 
 

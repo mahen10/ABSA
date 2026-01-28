@@ -191,11 +191,11 @@ with st.sidebar:
         st.info("Ketik ulasan game di bawah ini.")
         with st.expander("ℹ️ Tips: Gunakan kata kunci ini!"):
             st.markdown("""
-            * 🎨 **Graphics:** graphics, visual, art...
-            * ⚔️ **Gameplay:** gameplay, combat, mechanics...
-            * 📜 **Story:** story, plot, narrative...
-            * 🚀 **Performance:** fps, lag, crash...
-            * 🎵 **Music:** music, sound, audio...
+            * 🎨 **Graphics:** graphics, graphic, visual, visuals, ui, gui, art, artstyle, resolution, texture, animation, lighting, shadow, design, scenery, environment
+            * ⚔️ **Gameplay:** gameplay, control, controls, mechanic, mechanics, combat, movement, system, feature, features, action, battle, attack, defend, quest, quests, level, enemy, boss, difficulty
+            * 📜 **Story:** story, plot, narrative, lore, writing, dialogue, ending, cutscene, mission, twist, script, character, development, storyline, arc, pacing
+            * 🚀 **Performance:** performance, fps, frame, rate, optimization, memory, rendering, loading, server, connection, ping, latency, bug, glitch, crash, freeze
+            * 🎵 **Music:** music, sound, audio, sfx, voice, acting, soundtrack, ost, bgm, volume, melody, song, noise, dubbing
             """)
         user_text = st.text_area("Masukkan Review Game:", height=150)
         
@@ -465,3 +465,4 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+

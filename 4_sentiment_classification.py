@@ -132,7 +132,6 @@ def run(input_path, output_dir):
         ngram_range=(1, 3),   
         max_df=use_max_df,     # <-- Pakai variabel dinamis
         min_df=use_min_df,     # <-- Pakai variabel dinamis
-        stop_words="english",  
         sublinear_tf=True
     )
     

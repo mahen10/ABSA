@@ -149,18 +149,26 @@ if st.session_state['game_title']:
 st.markdown("---")
 
 # =====================================================
-# SIDEBAR
+# SIDEBAR (UPDATE INI)
 # =====================================================
 uploaded_file = None
 
 with st.sidebar:
     st.header("⚙️ Konfigurasi")
     
-    # PERBAIKAN: Tambahkan 'on_change=reset_state'
+    # 1. Checkbox Class Weight (Yang baru ditambahkan)
+    # ------------------------------------------------
+    use_cw = st.checkbox("⚖️ Pakai Class Weight (Balanced)?", value=True)
+    st.caption("Matikan untuk melihat hasil murni tanpa penyeimbangan data.")
+    
+    st.markdown("---")
+    
+    # 2. Radio Button (Pastikan formatnya persis seperti ini)
+    # -----------------------------------------------------
     input_mode = st.radio(
         "Pilih Sumber Data:",
         ["📂 Upload Excel", "✍️ Input Teks Manual", "🕷️ Scraping Steam ID"],
-        on_change=reset_state  # <--- INI KUNCINYA AGAR AUTO-REFRESH
+        on_change=reset_state  # Pastikan ada koma di baris sebelumnya
     )
     
     st.markdown("---")
@@ -172,8 +180,10 @@ with st.sidebar:
             with open(os.path.join(OUTPUT_DIR, "01_raw.xlsx"), "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success("File Terupload!")
+            
+            # Tombol Run
             if st.button("🚀 Jalankan Analisis", key="btn_upload"):
-                reset_state() # Reset dulu biar bersih
+                reset_state()
                 st.session_state['do_analysis'] = True
 
     # --- MODE 2: INPUT MANUAL ---
@@ -195,7 +205,7 @@ with st.sidebar:
                 input_path = os.path.join(OUTPUT_DIR, "01_raw.xlsx")
                 df_manual.to_excel(input_path, index=False)
                 
-                reset_state() # Reset dulu
+                reset_state()
                 st.session_state['do_analysis'] = True
             else:
                 st.warning("Mohon isi teks terlebih dahulu.")
@@ -208,7 +218,7 @@ with st.sidebar:
         
         if st.button("🕷️ Mulai Scraping & Analisis", key="btn_scrape"):
             if app_id.isdigit():
-                reset_state() # Reset dulu
+                reset_state()
                 with st.spinner("Mencari info game..."):
                     try:
                         game_name = step00.get_game_name(app_id)
@@ -228,13 +238,6 @@ with st.sidebar:
                     st.error("Gagal mengambil data atau tidak ada ulasan relevan.")
             else:
                 st.warning("App ID harus berupa angka.")
-# --- TAMBAHAN BARU: OPSI CLASS WEIGHT ---
-    use_cw = st.checkbox("⚖️ Pakai Class Weight (Balanced)?", value=True)
-    st.caption("Matikan untuk melihat hasil murni tanpa penyeimbangan data.")
-    st.markdown("---")
-    # ----------------------------------------
-
-    input_mode = st.radio(...)
 # =====================================================
 # MAIN PROCESS LOGIC (JALAN JIKA STATE TRUE)
 # =====================================================
@@ -462,6 +465,7 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 
 
 

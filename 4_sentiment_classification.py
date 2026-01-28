@@ -131,7 +131,8 @@ def run(input_path, output_dir):
     tfidf = TfidfVectorizer(
         ngram_range=(1, 3),   
         max_df=use_max_df,     # <-- Pakai variabel dinamis
-        min_df=use_min_df,     # <-- Pakai variabel dinamis
+        min_df=use_min_df,
+        stop_words="english",# <-- Pakai variabel dinamis
         sublinear_tf=True
     )
     

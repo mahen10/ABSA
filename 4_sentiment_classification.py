@@ -168,7 +168,6 @@ def run(input_path, output_dir):
     # Model Training
     model = LogisticRegression(
         max_iter=3000,
-        class_weight="balanced", 
         solver="lbfgs",
         C=2.0,                   
         random_state=42,

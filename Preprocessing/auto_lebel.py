@@ -222,10 +222,7 @@ def label_sentiment(opinion_word, opinion_context, umigon, vader, sarcasm_check_
     if not label:
         label = context_fallback(opinion_context, umigon, vader)
     
-    # Default Safety Net
-    if not label:
-        return "negative" # Asumsi default jika tidak ketemu apa-apa
-
+   
     # --- 2. SARCASM CHECK (NEW FEATURE) ---
     # Kita hanya perlu cek sarkasme jika label awalnya POSITIVE.
     # Jika label awal sudah NEGATIVE, sarkasme tidak mengubah apa-apa.

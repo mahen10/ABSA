@@ -5,6 +5,7 @@
 # - UMIGON (priority)
 # - VADER (fallback)
 # - Word-first → context fallback
+# - SARCASM DETECTION (New Feature)
 # Output:
 # - label_text (positive / negative)
 # - label_sentimen (1 / -1)
@@ -20,6 +21,21 @@ import os
 UMIGON_PATH = os.path.join("dict", "umigon-lexicon.tsv.txt")
 VADER_PATH = os.path.join("dict", "vader_lexicon.txt")
 
+# ===============================
+# GAMING SARCASM DICTIONARY
+# ===============================
+# Frasa dan pola ini digunakan untuk membalik sentimen Positive -> Negative
+SARCASM_PHRASES = [
+    "refund simulator", "crash simulator", "loading simulator", "walking simulator",
+    "slideshow", "unplayable", "garbage optimization", "waste of money",
+    "don't buy", "do not buy", "save your money", "mixed feelings",
+    "potato pc", "nice ppt", 
+    "yeah right", "as if", "oh really", "thanks for nothing",
+    "love the lag", "love the crash", "love the bugs", "amazing bug", 
+    "great crash", "best crash", "enjoy the lag", "favorite bug",
+    "totally playable", "barely playable", "looks like trash", 
+    "looks like a joke", "looks broken", "go fix it", "fix your game"
+]
 
 # ===============================
 # LOAD UMIGON LEXICON
@@ -68,6 +84,73 @@ def load_vader(path):
 
 
 # ===============================
+# SARCASM CHECKER
+# ===============================
+def check_sarcasm(text):
+    """
+    Mengecek apakah text mengandung indikasi sarkasme.
+    Input: text (sebaiknya raw sentence dengan tanda baca).
+    """
+    if pd.isna(text) or str(text).strip() == "":
+        return False
+        
+    text_lower = str(text).lower()
+    
+    # 1. Cek Frasa Pasti
+    for phrase in SARCASM_PHRASES:
+        if phrase in text_lower:
+            return True
+            
+    # 2. Cek Pola Regex (Pujian diikuti Masalah / Ironi)
+    technical_issues = r"(crash|bug|lag|freeze|glitch|delay|error|broken|trash|unplayable)"
+    mock_praises = r"(great|good|awesome|amazing|perfect|brilliant|wonderful|love|best|nice)"
+    
+    sarcasm_patterns = [
+        # Pattern: Pujian + Masalah (Ex: "Great crash")
+        rf"{mock_praises}\s+.*{technical_issues}",
+        
+        # Pattern: 10/10 tapi ironis (Menangani variasi 10/10, 10 10, dll)
+        r"10\s*[/:\s]\s*10.*(uninstall|crash|waste|bug|trash|refund)",
+        
+        # Pattern: Negasi di akhir (Ex: "Good game... NOT")
+        r".*\bnot[.!?]*$", 
+        
+        # Pattern: Tanda universal sarkasme
+        r"/s$"
+    ]
+    
+    for pattern in sarcasm_patterns:
+        if re.search(pattern, text_lower):
+            return True
+            
+    return False
+
+
+# ===============================
+# HELPER: GET RAW CONTEXT
+# ===============================
+def get_raw_context(original_review, opinion_word):
+    """
+    Mencari kalimat ASLI (dengan tanda baca) dari original_review 
+    yang mengandung opinion_word.
+    """
+    if pd.isna(original_review) or pd.isna(opinion_word):
+        return ""
+    
+    # Pecah review panjang menjadi kalimat-kalimat (berdasarkan . ! ?)
+    # Regex ini memisahkan kalimat saat ketemu titik/tanda seru/tanya
+    sentences = re.split(r'(?<=[.!?])\s+', str(original_review))
+    
+    target_word = str(opinion_word).lower()
+    
+    for sent in sentences:
+        if target_word in sent.lower():
+            return sent  # Kembalikan kalimat mentah
+            
+    return "" # Jika tidak ketemu, kembalikan kosong
+
+
+# ===============================
 # CONTEXT FALLBACK
 # ===============================
 def context_fallback(text, umigon, vader):
@@ -89,7 +172,13 @@ def context_fallback(text, umigon, vader):
 # ===============================
 # FINAL LABEL FUNCTION
 # ===============================
-def label_sentiment(opinion_word, opinion_context, umigon, vader):
+def label_sentiment(opinion_word, opinion_context, umigon, vader, sarcasm_check_text=None):
+    """
+    sarcasm_check_text: Text raw untuk pengecekan sarkasme (opsional)
+    """
+
+    # --- 1. DETERMINE INITIAL LABEL (EXISTING LOGIC) ---
+    label = None
 
     # split opinion_word (comma / space safe)
     words = [
@@ -99,17 +188,38 @@ def label_sentiment(opinion_word, opinion_context, umigon, vader):
     ]
 
     # 1️⃣ UMIGON — opinion word
-    for w in words:
-        if w in umigon:
-            return umigon[w]
+    if not label:
+        for w in words:
+            if w in umigon:
+                label = umigon[w]
+                break
 
     # 2️⃣ VADER — opinion word
-    for w in words:
-        if w in vader:
-            return "positive" if vader[w] > 0 else "negative"
+    if not label:
+        for w in words:
+            if w in vader:
+                label = "positive" if vader[w] > 0 else "negative"
+                break
 
     # 3️⃣ CONTEXT FALLBACK
-    return context_fallback(opinion_context, umigon, vader)
+    if not label:
+        label = context_fallback(opinion_context, umigon, vader)
+    
+    # Default Safety Net
+    if not label:
+        return "negative" # Asumsi default jika tidak ketemu apa-apa
+
+    # --- 2. SARCASM CHECK (NEW FEATURE) ---
+    # Kita hanya perlu cek sarkasme jika label awalnya POSITIVE.
+    # Jika label awal sudah NEGATIVE, sarkasme tidak mengubah apa-apa.
+    if label == "positive":
+        # Gunakan text raw jika ada, jika tidak pakai opinion_context
+        text_to_check = sarcasm_check_text if sarcasm_check_text else opinion_context
+        
+        if check_sarcasm(text_to_check):
+            return "negative" # FLIP KE NEGATIF
+
+    return label
 
 
 # ===============================
@@ -138,12 +248,17 @@ def run(input_path: str, output_path: str):
     if not required_cols.issubset(df.columns):
         raise ValueError("Kolom opinion_word / opinion_context tidak lengkap")
 
+    # Cek apakah kita punya akses ke review asli (untuk akurasi sarkasme lebih baik)
+    has_original_review = "original_review" in df.columns
+
     df["label_text"] = df.apply(
         lambda row: label_sentiment(
             row["opinion_word"],
             row["opinion_context"],
             umigon,
-            vader
+            vader,
+            # Ambil raw context dari original_review jika ada, untuk sarkasme
+            sarcasm_check_text=get_raw_context(row["original_review"], row["opinion_word"]) if has_original_review else row["opinion_context"]
         ),
         axis=1
     )

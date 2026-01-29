@@ -26,15 +26,32 @@ VADER_PATH = os.path.join("dict", "vader_lexicon.txt")
 # ===============================
 # Frasa dan pola ini digunakan untuk membalik sentimen Positive -> Negative
 SARCASM_PHRASES = [
-    "refund simulator", "crash simulator", "loading simulator", "walking simulator",
-    "slideshow", "unplayable", "garbage optimization", "waste of money",
-    "don't buy", "do not buy", "save your money", "mixed feelings",
-    "potato pc", "nice ppt", 
+    # --- 1. Frasa Sarkasme Langsung ---
     "yeah right", "as if", "oh really", "thanks for nothing",
-    "love the lag", "love the crash", "love the bugs", "amazing bug", 
-    "great crash", "best crash", "enjoy the lag", "favorite bug",
-    "totally playable", "barely playable", "looks like trash", 
-    "looks like a joke", "looks broken", "go fix it", "fix your game"
+    "obviously not", "clearly not",
+
+    # --- 2. Polarity Contradiction (Cinta tapi Benci) ---
+    "love the lag", "love the crash", "love the bugs", 
+    "amazing bug", "great crash", "best crash", 
+    "enjoy the lag", "favorite bug", "awesome glitch",
+
+    # --- 3. Disappointment Irony & Ironic Statement ---
+    "totally playable", "barely playable", 
+    "just what i needed", "exactly what i wanted", "couldn't be better",
+    "mixed feelings", "save your money", "waste of money",
+
+    # --- 4. Perbandingan Menghina ---
+    "looks like trash", "looks like a joke", "looks broken",
+    "like a clown", "like a bug", "looks like garbage",
+    "potato pc", "nice ppt", "slideshow", # PPT/Slideshow = Lag
+
+    # --- 5. Perintah Menghina ---
+    "go fix it", "try harder", "good luck with that",
+    "keep crashing", "fix your game", "don't buy", "do not buy",
+
+    # --- 6. Istilah Teknis Gaming (Klasik) ---
+    "refund simulator", "crash simulator", "loading simulator", 
+    "walking simulator", "unplayable", "garbage optimization"
 ]
 
 # ===============================

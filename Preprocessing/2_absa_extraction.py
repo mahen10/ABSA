@@ -1,30 +1,45 @@
+# =====================================================
+# FILE: 2_absa_extraction_fixed.py
+# FIXED: Extract MULTIPLE aspects per clause
+# =====================================================
 import pandas as pd
 import os
-import re
 import nltk
+import re
 from nltk import pos_tag
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
-# Init NLTK
-try:
-    nltk.data.find('taggers/averaged_perceptron_tagger')
-except LookupError:
-    nltk.download('punkt', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-    nltk.download('stopwords', quiet=True)
+# =====================================================
+# NLTK SAFE INIT
+# =====================================================
+def ensure_nltk():
+    resources = [
+        ("tokenizers/punkt", "punkt"),
+        ("tokenizers/punkt_tab", "punkt_tab"),
+        ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
+        ("taggers/averaged_perceptron_tagger_eng", "averaged_perceptron_tagger_eng"),
+        ("corpora/stopwords", "stopwords"),
+    ]
+    for path, name in resources:
+        try:
+            nltk.data.find(path)
+        except LookupError:
+            try:
+                print(f"Downloading {name}...")
+                nltk.download(name, quiet=True)
+            except Exception as e:
+                print(f"Warning: Could not download {name}: {e}")
 
-# ==========================================
-# CONFIG
-# ==========================================
-BASE_DIR = os.getcwd()
-INPUT_PATH = os.path.join(BASE_DIR, 'Output', 'DataSet', '05_cleaning.xlsx')
-OUTPUT_PATH = os.path.join(BASE_DIR, 'Output', 'DataSet', '06_absa_extraction.xlsx')
+ensure_nltk()
 
+# =====================================================
+# CONSTANTS & DICTIONARIES
+# =====================================================
 STOPWORDS = set(stopwords.words("english"))
 
 ASPECT_KEYWORDS = {
-      "graphics": [
+    "graphics": [
         "graphics", "graphic", "visual", "visuals", "ui", "gui",
         "art", "artstyle", "resolution", "texture", "animation", 
         "lighting", "shadow", "design", "scenery", "environment"
@@ -52,116 +67,155 @@ ASPECT_KEYWORDS = {
     ]
 }
 
-# ==========================================
-# FUNCTIONS
-# ==========================================
+# Regex untuk memecah kalimat menjadi klausa
+CLAUSE_SPLIT_PATTERN = r'[.,!?;]| but | however | although | though | yet | while | whereas | except '
+
+# =====================================================
+# UTIL
+# =====================================================
+def valid_word(w):
+    return (
+        w.isalpha() 
+        and w not in STOPWORDS 
+        and len(w) > 2
+    )
 
 def light_clean(text):
-    if not isinstance(text, str): return ""
+    """Membersihkan teks asli tanpa stemming agar enak dibaca"""
+    if not isinstance(text, str):
+        return ""
     text = text.lower()
-    # Sisakan tanda baca penting untuk pemisah klausa
     text = re.sub(r'[^a-z0-9\s.,!?;]', '', text) 
     return text
 
-def valid_word(w):
-    return w.isalpha() and w not in STOPWORDS and len(w) > 2
-
-def extract(text):
-    if not text: return []
-    
-    text = light_clean(text)
-    
-    # Pecah kalimat berdasarkan tanda baca
-    clauses = re.split(r'[.,!?;]| but | however | although | though | yet | while ', text)
+# =====================================================
+# ABSA CORE - FIXED VERSION
+# =====================================================
+def extract_aspect_opinion(text):
+    if not text:
+        return []
     
     results = []
     
+    # Bersihkan ringan (TANPA STEMMING)
+    text = light_clean(text)
+    
+    # Pecah kalimat menjadi segmen (Klausa)
+    clauses = re.split(CLAUSE_SPLIT_PATTERN, text)
+    
     for clause in clauses:
         clause = clause.strip()
-        if len(clause) < 3: continue
-            
+        if len(clause) < 3:
+            continue
+        
         tokens = word_tokenize(clause)
         tagged = pos_tag(tokens)
         
-        # 1. Cari Opini
-        opinions = []
+        # Cari kata sifat (JJ), Verb (VB), Adverb (RB)
+        potential_opinions = []
         for w, t in tagged:
             if (t.startswith("JJ") or t.startswith("VB") or t.startswith("RB")) and valid_word(w):
-                opinions.append(w)
+                potential_opinions.append(w)
         
-        # 2. Cari SEMUA Aspek dalam kalimat (PERBAIKAN DI SINI)
-        found_aspects = set() # Gunakan Set biar tidak duplikat
-        for w in tokens:
+        # ========== PERBAIKAN UTAMA: CARI SEMUA ASPEK ==========
+        found_aspects = []  # Ubah jadi LIST untuk menampung multiple aspects
+        
+        for w_clause in tokens:
             for aspect, keys in ASPECT_KEYWORDS.items():
-                if w in keys:
-                    found_aspects.add(aspect)
-                    # Jangan break outer loop, lanjut cari token berikutnya
+                if w_clause in keys:
+                    # Hindari duplikat aspek dalam satu klausa
+                    if aspect not in found_aspects:
+                        found_aspects.append(aspect)
+        # =======================================================
         
-        # 3. Simpan Hasil (Looping setiap aspek yang ketemu)
-        if found_aspects and opinions:
-            opinion_str = ", ".join(opinions)
+        # Simpan setiap aspek yang ditemukan
+        if found_aspects and potential_opinions:
+            opinion_str = ", ".join(potential_opinions)
             
-            for aspect in found_aspects:
+            for aspect in found_aspects:  # Loop semua aspek yang ditemukan
                 results.append({
                     "aspect": aspect,
                     "opinion_word": opinion_str,
                     "opinion_context": clause
                 })
-            
+    
     return results
 
-# ==========================================
-# MAIN RUN
-# ==========================================
-def run():
-    print("--- [6] Mulai ABSA Extraction ---")
-    if not os.path.exists(INPUT_PATH):
-        print(f"Error: {INPUT_PATH} tidak ditemukan.")
-        return
+# =====================================================
+# PIPELINE ENTRY POINT
+# =====================================================
+def run(input_path, output_path):
+    print(f"Processing: {input_path}")
     
-    df = pd.read_excel(INPUT_PATH, engine='openpyxl')
+    try:
+        df = pd.read_excel(input_path)
+    except Exception as e:
+        print(f"Error reading file: {e}")
+        return None
+
     rows = []
     
-    # Cari kolom original
-    orig_col = 'review' 
-    if orig_col not in df.columns:
-        for c in df.columns:
-            if 'original' in c or 'content' in c: orig_col = c; break
+    # 1. Tentukan kolom teks sumber
+    source_col = "review"
+    if "review" not in df.columns:
+        alternatives = ["content", "text", "body", "ulasan", "cleaned_review"]
+        for alt in alternatives:
+            if alt in df.columns:
+                source_col = alt
+                break
     
-    print(f"Sumber teks: '{orig_col}'")
-
-    # Identifikasi kolom ID
-    id_cols = [c for c in df.columns if any(x in c.lower() for x in ['appid', 'app_id', 'game_id', 'steam_id', 'author', 'timestamp', 'voted'])]
+    # 2. Preserve metadata columns
+    preserve_cols = [col for col in df.columns if any(x in col.lower() for x in ['appid', 'app_id', 'game_id', 'steam_id', 'author', 'timestamp', 'voted'])]
+    
+    print(f"Using column '{source_col}' for extraction.")
+    print(f"Preserving Metadata Columns: {preserve_cols}")
 
     for _, r in df.iterrows():
-        original_text = str(r.get(orig_col, ''))
-        matches = extract(original_text)
+        text = str(r.get(source_col, ""))
+        
+        if not text.strip() or text.lower() == "nan":
+            continue
+
+        matches = extract_aspect_opinion(text)
         
         for m in matches:
-            row = {
-                "original_review": original_text,
-                "cleaned_source": r.get('cleaned_review', ''),
-                "aspect": m['aspect'],
-                "opinion_word": m['opinion_word'],
-                "opinion_context": m['opinion_context']
+            row_data = {
+                "original_review": r.get("review", text),
+                "opinion_word": m["opinion_word"],   
+                "processed_opinion": m["opinion_word"], 
+                "aspect": m["aspect"],
+                "opinion_context": m["opinion_context"]
             }
-            # Salin ID
-            for col in id_cols: row[col] = r[col]
-            rows.append(row)
             
-    out_df = pd.DataFrame(rows)
+            for col in preserve_cols:
+                row_data[col] = r[col]
+            
+            rows.append(row_data)
     
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    out_df.to_excel(OUTPUT_PATH, index=False)
-    
-    print(f"✅ Selesai. Extracted {len(out_df)} baris data.")
-    print(f"Disimpan di: {OUTPUT_PATH}")
-    
-    # Cek output contoh manual Anda
-    print("\n--- Test Case (Manual Example) ---")
-    manual_test = extract("its a good music, but i dont like about gameplay and story")
-    for m in manual_test:
-        print(f"Aspek: {m['aspect']} | Opini: {m['opinion_word']}")
+    if not rows:
+        print("Warning: No aspects extracted!")
+        base_cols = ["original_review", "opinion_word", "processed_opinion", "aspect", "opinion_context"]
+        out_df = pd.DataFrame(columns=base_cols + preserve_cols)
+    else:
+        out_df = pd.DataFrame(rows)
 
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    out_df.to_excel(output_path, index=False)
+    print(f"Extracted {len(out_df)} aspect-opinion pairs. Saved to {output_path}")
+    
+    return out_df
+
+# =====================================================
+# TEST DENGAN CONTOH ANDA
+# =====================================================
 if __name__ == "__main__":
-    run()
+    test_text = "its a good music, but i dont like about gameplay and story"
+    
+    print("Testing with:", test_text)
+    print("\nResults:")
+    results = extract_aspect_opinion(test_text)
+    
+    for i, r in enumerate(results, 1):
+        print(f"\n{i}. Aspect: {r['aspect']}")
+        print(f"   Opinion: {r['opinion_word']}")
+        print(f"   Context: {r['opinion_context']}")

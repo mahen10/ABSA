@@ -135,7 +135,6 @@ def run(input_path, output_dir, use_balanced=True):
         ngram_range=(1, 3),   
         max_df=use_max_df,     
         min_df=use_min_df,     
-        stop_words="english",  
         sublinear_tf=True
     )
     

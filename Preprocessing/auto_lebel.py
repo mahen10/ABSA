@@ -175,7 +175,7 @@ def context_fallback(text, umigon, vader):
     tokens = str(text).lower().split() 
     
     # Daftar kata penyangkal (Negation words)
-    negations = {"not", "no", "never", "n't", "dont", "cant", "wont", "havent", "wouldnt"}
+    negations = {"not", "no", "never", "n't", "dont", "cant", "wont", "havent", "wouldnt","haven’t"}
 
     for i, t in enumerate(tokens):
         # Bersihkan token dari tanda baca untuk pengecekan kamus

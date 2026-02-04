@@ -167,7 +167,7 @@ with st.sidebar:
     # -----------------------------------------------------
     input_mode = st.radio(
         "Pilih Sumber Data:",
-        ["📂 Upload Excel", "✍️ Input Teks Manual", "🕷️ Scraping Steam ID"],
+        ["📂 Upload Excel", "✍️ Input Teks Manual", "🕷️ Steam ID"],
         on_change=reset_state  # Pastikan ada koma di baris sebelumnya
     )
     
@@ -466,5 +466,6 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 
 

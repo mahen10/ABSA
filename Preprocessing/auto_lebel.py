@@ -171,17 +171,45 @@ def get_raw_context(original_review, opinion_word):
 # CONTEXT FALLBACK
 # ===============================
 def context_fallback(text, umigon, vader):
-    tokens = re.findall(r"\b\w+\b", str(text).lower())
+    # Pecah jadi list kata biar urutannya terjaga
+    tokens = str(text).lower().split() 
+    
+    # Daftar kata penyangkal (Negation words)
+    negations = {"not", "no", "never", "n't", "dont", "cant", "wont", "havent", "wouldnt"}
 
-    # UMIGON first
-    for t in tokens:
-        if t in umigon:
-            return umigon[t]
-
-    # VADER fallback
-    for t in tokens:
-        if t in vader:
-            return "positive" if vader[t] > 0 else "negative"
+    for i, t in enumerate(tokens):
+        # Bersihkan token dari tanda baca untuk pengecekan kamus
+        clean_t = re.sub(r'[^\w]', '', t)
+        
+        current_sentiment = None
+        
+        # 1. Cek Sentiment Kata Saat Ini
+        if clean_t in umigon:
+            current_sentiment = umigon[clean_t]
+        elif clean_t in vader:
+            current_sentiment = "positive" if vader[clean_t] > 0 else "negative"
+            
+        # 2. Jika ketemu sentimen, CEK KATA SEBELUMNYA (Negation Check)
+        if current_sentiment:
+            # Cek 1-2 kata sebelumnya
+            prev_1 = tokens[i-1] if i > 0 else ""
+            prev_2 = tokens[i-2] if i > 1 else ""
+            
+            # Cek apakah kata sebelumnya mengandung negasi (misal: "not", "haven't")
+            is_negated = False
+            for neg in negations:
+                if neg in prev_1 or neg in prev_2:
+                    is_negated = True
+                    break
+            
+            # 3. Balikkan Sentimen jika ada Negasi
+            if is_negated:
+                if current_sentiment == "negative":
+                    return "positive" # "No bug" = Positive
+                else:
+                    return "negative" # "Not good" = Negative
+            
+            return current_sentiment
 
     return None
 

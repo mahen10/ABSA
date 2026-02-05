@@ -72,7 +72,7 @@ def normalize_elongation(text):
 # 5. CLEANING (FINAL)
 # ============================
 def cleaning(text):
-    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = re.sub(r'[^a-z0-9\s.,!?;]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 

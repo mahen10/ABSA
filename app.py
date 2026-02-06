@@ -19,6 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # Style Matplotlib agar grafik terlihat modern
 plt.style.use('ggplot')
 
@@ -466,6 +467,7 @@ if st.session_state['do_analysis']:
 
 elif not uploaded_file and input_mode == "📂 Upload Excel":
     st.info("👈 Silakan upload file Excel di menu sebelah kiri.")
+
 
 
 
